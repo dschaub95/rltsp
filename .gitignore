@@ -1,4 +1,8 @@
-logs
-results
+logs/**
+!logs/.gitkeep
+results/**
+!results/.gitkeep
+data/**
+!data/.gitkeep
 **/__pycache__
 **/.vscode
