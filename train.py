@@ -15,9 +15,11 @@ from configs.config import get_config
 
 from nets.pomo import ACTOR
 
-def train(config):
+def train(config, 
+          save_dir='./logs',
+          save_folder_name='train'):
     # Make Log File
-    logger, result_folder_path = Get_Logger(config.SAVE_FOLDER_NAME)
+    logger, result_folder_path = Get_Logger(save_dir, save_folder_name)
 
 
     # Save used HYPER_PARAMS
@@ -49,11 +51,11 @@ def train(config):
 
         #  TRAIN
         #######################################################
-        train_one_epoch(actor, **log_package)
+        train_one_epoch(config, actor, **log_package)
 
         #  EVAL
         #######################################################
-        evaluate(actor, **log_package)
+        validate(config, actor, **log_package)
 
         #  CHECKPOINT
         #######################################################
@@ -90,7 +92,7 @@ def train_one_epoch(config, actor_group, epoch, timer_start, logger):
 
         # Actor Group Move
         ###############################################
-        env = GroupEnvironment(data)
+        env = GroupEnvironment(data, config.TSP_SIZE)
         group_s = config.TSP_SIZE
         group_state, reward, done = env.reset(group_size=group_s)
         actor_group.reset(group_state)
@@ -157,7 +159,7 @@ def update_eval_result(old_result):
     global eval_result
     eval_result = old_result
 
-def evaluate(config, actor_group, epoch, timer_start, logger):
+def validate(config, actor_group, epoch, timer_start, logger):
 
     global eval_result
 
@@ -178,7 +180,7 @@ def evaluate(config, actor_group, epoch, timer_start, logger):
         batch_s = data.size(0)
 
         with torch.no_grad():
-            env = GroupEnvironment(data)
+            env = GroupEnvironment(data, config.TSP_SIZE)
             group_s = config.TSP_SIZE
             group_state, reward, done = env.reset(group_size=group_s)
             actor_group.reset(group_state)
@@ -216,7 +218,11 @@ def evaluate(config, actor_group, epoch, timer_start, logger):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config_path", type=str, default='./configs/default.json')
+    parser.add_argument("--save_dir", type=str, default='./logs')
+    parser.add_argument("--save_folder_name", type=str, default='train')
     opts = parser.parse_known_args()[0]
     # get config
     config = get_config(opts.config_path)
-    train(config)
+    train(config, 
+          save_dir=opts.save_dir,
+          save_folder_name=opts.save_folder_name)
