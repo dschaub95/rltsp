@@ -14,7 +14,8 @@ from configs.config import get_config
 
 
 def test(config, 
-         model_path='./logs/Saved_TSP100_Model', 
+         model_path='./logs/Saved_TSP100_Model',
+         save_dir='./results', 
          save_folder_name='test',
          test_set_size=10000,
          test_batch_size=1024,
@@ -33,7 +34,7 @@ def test(config,
     num_trajectories = np.clip(num_trajectories, 1, num_nodes)
     
     # Make Log File
-    logger, result_folder_path = Get_Logger(save_folder_name)
+    logger, result_folder_path = Get_Logger(save_dir, save_folder_name)
 
     print(result_folder_path)
 
@@ -91,7 +92,7 @@ def test(config,
                 group_state, reward, done = env.step(action)
         
         if use_augmentation:
-            # reshape result such and reduce to most promising trajectories for each sampled graph
+            # reshape result reduce to most promising trajectories for each sampled graph
             reward = torch.reshape(reward, (8, -1, num_trajectories))
             reward, _ = reward.max(dim=0)
         # the max does not do anything if the trajectory has size 1
@@ -115,13 +116,17 @@ def test(config,
     logger.info('---------------------------------------------------')
     logger.info('---------------------------------------------------')
 
+def test_multiple(test_set_paths=None):
+    pass
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_path", type=str, default='./logs/Saved_TSP100_Model')
     parser.add_argument("--config_path", type=str, default='./configs/default.json')
     parser.add_argument("--num_trajectories", type=int, default=1)
     parser.add_argument('--use_augmentation', dest='use_augmentation', default=False, action='store_true')
-    parser.add_argument("--test_batch_size", type=int, default=1280)
+    parser.add_argument("--test_batch_size", type=int, default=1024)
+    parser.add_argument("--save_dir", type=str, default='./results')
     parser.add_argument("--save_folder_name", type=str, default='test')
     # random test set specifications
     parser.add_argument("--test_set_size", type=int, default=1e+4)

@@ -11,11 +11,11 @@ def timetz(*args):
     return datetime.datetime.now(tz).timetuple()
 
 
-def Get_Logger(save_folder_name):
+def Get_Logger(save_dir, save_folder_name):
     # make_dir
     #######################################################
     prefix = datetime.datetime.now(pytz.timezone("Asia/Seoul")).strftime("%Y%m%d_%H%M__")
-    result_folder_no_postfix = "./results/{}".format(prefix + save_folder_name)
+    result_folder_no_postfix = f"{save_dir}/{prefix + save_folder_name}"
 
     result_folder_path = result_folder_no_postfix
     folder_idx = 0
