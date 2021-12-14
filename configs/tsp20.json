@@ -1,7 +1,7 @@
 {
-    "TSP_SIZE": 100,
+    "TSP_SIZE": 20,
   
-    "TOTAL_EPOCH": 2000,
+    "TOTAL_EPOCH": 200,
   
     "TRAIN_DATASET_SIZE": 1e+5,
     "TEST_DATASET_SIZE": 1e+4,
