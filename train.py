@@ -1,4 +1,5 @@
 import numpy as np
+import random
 import time
 import os
 import argparse
@@ -18,6 +19,9 @@ from nets.pomo import ACTOR
 def train(config, 
           save_dir='./logs',
           save_folder_name='train'):
+    np.random.seed(37)
+    random.seed(37)
+    torch.manual_seed(37)
     # Make Log File
     logger, result_folder_path = Get_Logger(save_dir, save_folder_name)
 
@@ -41,6 +45,7 @@ def train(config,
 
     # GO
     timer_start = time.time()
+    best_dist_avg = np.Inf
     for epoch in range(1, config.TOTAL_EPOCH+1):
         
         log_package = {
@@ -55,15 +60,17 @@ def train(config,
 
         #  EVAL
         #######################################################
-        validate(config, actor, **log_package)
+        dist_avg = validate(config, actor, **log_package)
 
         #  CHECKPOINT
         #######################################################
-        checkpoint_epochs = np.arange(1, config.TOTAL_EPOCH+1, 10)
-        if epoch in checkpoint_epochs:
+        
+        checkpoint_epochs = np.arange(1, config.TOTAL_EPOCH+1, 5)
+        # only save checkpoint if the performance has improved --> the last checkpoint is always the best
+        if epoch in checkpoint_epochs and dist_avg < best_dist_avg:
+            best_dist_avg = dist_avg
             checkpoint_folder_path = '{}/CheckPoint_ep{:05d}'.format(result_folder_path, epoch)
             os.mkdir(checkpoint_folder_path)
-
             model_save_path = '{}/ACTOR_state_dic.pt'.format(checkpoint_folder_path)
             torch.save(actor.state_dict(), model_save_path)
             optimizer_save_path = '{}/OPTIM_state_dic.pt'.format(checkpoint_folder_path)
@@ -212,12 +219,13 @@ def validate(config, actor_group, epoch, timer_start, logger):
     logger.info('--------------------------------------------------------------------------')
     logger.info('--------------------------------------------------------------------------')
     logger.info('--------------------------------------------------------------------------')
+    return dist_avg
 
 
                 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config_path", type=str, default='./configs/default.json')
+    parser.add_argument("--config_path", type=str, default='./configs/tsp20.json')
     parser.add_argument("--save_dir", type=str, default='./logs')
     parser.add_argument("--save_folder_name", type=str, default='train')
     opts = parser.parse_known_args()[0]
