@@ -121,7 +121,6 @@ def test(config,
         max_reward, _ = reward.max(dim=-1)
         eval_dist_AM_0.push(-max_reward)  # reward was given as negative dist
         
-        # in case of augmentation select 
         if (time.time()-logger_start > config.LOG_PERIOD_SEC) or (episode >= test_set_size):
             timestr = time.strftime("%H:%M:%S", time.gmtime(time.time()-timer_start))
             percent = np.round((episode / test_set_size) * 100, 1)
@@ -144,7 +143,7 @@ if __name__ == "__main__":
     parser.add_argument("--config_path", type=str, default='./configs/default.json')
     parser.add_argument("--num_trajectories", type=int, default=1)
     parser.add_argument('--use_pomo_augmentation', dest='use_pomo_augmentation', default=False, action='store_true')
-    parser.add_argument("--sampling_steps", type=int, default=2)
+    parser.add_argument("--sampling_steps", type=int, default=1)
     parser.add_argument("--test_batch_size", type=int, default=1024)
     parser.add_argument("--save_dir", type=str, default='./results')
     parser.add_argument("--save_folder_name", type=str, default='test')
