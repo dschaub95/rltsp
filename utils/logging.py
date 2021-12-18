@@ -3,8 +3,9 @@ import os
 import datetime
 import pytz
 import re
+from utils.torch_objects import device
 
-tz = pytz.timezone("Asia/Seoul")
+tz = pytz.timezone("Europe/Berlin")
 
 
 def timetz(*args):
@@ -14,7 +15,7 @@ def timetz(*args):
 def Get_Logger(save_dir, save_folder_name):
     # make_dir
     #######################################################
-    prefix = datetime.datetime.now(pytz.timezone("Asia/Seoul")).strftime("%Y%m%d_%H%M__")
+    prefix = datetime.datetime.now(pytz.timezone("Europe/Berlin")).strftime("%Y%m%d_%H%M__")
     result_folder_no_postfix = f"{save_dir}/{prefix + save_folder_name}"
 
     result_folder_path = result_folder_no_postfix
@@ -42,7 +43,8 @@ def Get_Logger(save_dir, save_folder_name):
     logger.addHandler(fileHandler)
 
     logger.setLevel(level=logging.INFO)
-
+    logger.info(f'Saving logs in: {result_folder_path}')
+    logger.info(f'Using device: {device}')
     return logger, result_folder_path
 
 
