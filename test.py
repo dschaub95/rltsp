@@ -39,7 +39,7 @@ if __name__ == "__main__":
 
     # get config
     config = get_config(opts.config_path)
-    
+    config.update({'TSP_SIZE': opts.num_nodes})
 
     # Init logger
     logger, result_folder_path = Get_Logger(opts.save_dir, opts.save_folder_name)
