@@ -1,9 +1,12 @@
 import numpy as np
+import fnmatch
+import os
+import glob
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 
-from utils.torch_objects import Tensor
-from utils.tsp_transformer import TSPEucTransformer, RandomTSPEucTransformation
+from main_code.utils.torch_objects import Tensor
+from main_code.utils.data.tsp_transformer import TSPEucTransformer, RandomTSPEucTransformation
 
 def TSP_DATA_LOADER__RANDOM(num_samples, num_nodes, batch_size):
     dataset = TSPDataSetRandom(num_samples=int(num_samples), num_nodes=int(num_nodes))
@@ -43,6 +46,32 @@ def TSP_collate_fn(batch):
 def identity_collate_fn(batch):
     return batch
 
+def TSP_disk_collate_fn(batch):
+    # batch consists of node coords, solution/length
+    node_xy_batch = np.array([sample[0] for sample in batch])
+    node_xy_batch = Tensor(node_xy_batch)
+    solution_batch = np.array([sample[1] for sample in batch])
+    solution_batch = Tensor(solution_batch)
+    opt_len_batch = np.array([sample[2] for sample in batch])
+    opt_len_batch = Tensor(opt_len_batch)
+    # alternatively with np.array directly?
+    return node_xy_batch, solution_batch, opt_len_batch
+
+
+class TSPDataset(Dataset):
+    def __init__(self) -> None:
+        super().__init__()
+
+    def _get_new_instance(self):
+        raise NotImplementedError
+    
+    def __getitem__(self, index):
+        data = self.get_new_instance()
+        return data
+
+    def __len__(self):
+        raise NotImplementedError
+
 class TSPDataSetRandom(Dataset):
     """
     Base randomly generated data set for train and test
@@ -59,14 +88,17 @@ class TSPDataSetRandom(Dataset):
             # generate random seed for this run
             seed = np.random.randint(2**63)
             self.rng = np.random.default_rng(seed=seed)
+    
+    def get_new_instance(self):
+        return self.rng.random((self.num_nodes, 2))
 
     def __getitem__(self, index):
-        node_xy_data = self.rng.random((self.num_nodes, 2))
-        # node_xy_data = np.random.rand(self.num_nodes, 2)
+        node_xy_data = self.get_new_instance()
         return node_xy_data
 
     def __len__(self):
         return self.num_samples
+
 
 class TSPTrainSetRandom(TSPDataSetRandom):
     def __init__(self, num_samples, num_nodes, clustered=False):
@@ -110,33 +142,31 @@ class TSPTestSetRandom(TSPDataSetRandom):
 
 
 
+class TSPDatasetSaved(Dataset):
+    def __init__(self, path):
+        # path to the dataset
+        self.path = path
+        self.cur_instance = 0
 
-class TSP_Dataset_from_disk(Dataset):
-    def __init__(self, num_samples, num_nodes):
-        self.num_samples = num_samples
-        self.num_nodes = num_nodes
+    def get_new_instance(self, index):
+        # load problem instance in order
+        # load node coordinates from file
+        # load solution
+        # load length
+        # load heatmap
+        pass 
 
     def __getitem__(self, index):
-        node_xy_data = np.random.rand(self.num_nodes, 2)
+        node_xy_data = self.get_new_instance(self)
+        self.cur_instance += 1
 
         return node_xy_data
 
     def __len__(self):
-        return self.num_samples
+        # return number of files in the directory
+        # return len(fnmatch.filter(os.listdir(self.path), '*.tsp'))
+        return len(os.listdir(f'{self.path}/problems'))
+        # return len(glob.glob(f'{self.path}/problems/*.tsp'))
 
 
-def TSP_collate_fn(batch):
-    batch = np.array(batch)
-    node_xy = Tensor(batch)
-    return node_xy
-
-class TSPLoader(DataLoader):
-    def __init__(self, data_set, num_samples, num_nodes, batch_size):
-        super().__init__(dataset=TSPDataSetRandom(num_samples=num_samples, num_nodes=num_nodes), 
-                         batch_size=batch_size, shuffle=False, 
-                         num_workers=0, 
-                         collate_fn=TSP_collate_fn)
-
-class AugmentedTSPLoader(DataLoader):
-    pass
 

@@ -2,15 +2,18 @@ import numpy as np
 import random
 import time
 import torch
-from utils.torch_objects import device, Tensor, LongTensor
-from environment.environment import GroupEnvironment
-from utils.utils import Average_Meter
-from utils.tsp_transformer import get_group_travel_distances_sampling
-from utils.data_loader import TSPTestDataLoaderRandom
+from main_code.utils.torch_objects import device, Tensor, LongTensor
+from main_code.environment.environment import GroupEnvironment
+from main_code.utils.utils import Average_Meter
+from main_code.utils.data.tsp_transformer import get_group_travel_distances_sampling
+from main_code.utils.data.data_loader import TSPTestDataLoaderRandom
+
+class BaseTester:
+    pass
 
 class TSPTester:
     """
-    Provides a fixed and highlevel testing environment, which executes a specified testing protocoll
+    Provides a highlevel testing API, which executes a specified testing protocoll
     """
     def __init__(self, 
                  config,

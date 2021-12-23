@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from utils.torch_objects import device
+from main_code.utils.torch_objects import device
 
 
 class Average_Meter:

@@ -3,7 +3,7 @@ import os
 import datetime
 import pytz
 import re
-from utils.torch_objects import device
+from main_code.utils.torch_objects import device
 
 tz = pytz.timezone("Europe/Berlin")
 

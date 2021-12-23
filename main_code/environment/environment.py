@@ -1,13 +1,7 @@
 import torch
 import numpy as np
 
-# For debugging
-from IPython.core.debugger import set_trace
-
-from torch.utils.data import Dataset
-from torch.utils.data import DataLoader
-
-from utils.torch_objects import BoolTensor, Tensor, LongTensor
+from main_code.utils.torch_objects import BoolTensor, Tensor, LongTensor
 
 
 class State:
@@ -129,13 +123,14 @@ class GroupEnvironment:
         self.group_s = None
         self.group_state = None
         self.tsp_size = tsp_size
+        self.done = False
 
     def reset(self, group_size):
         self.group_s = group_size
         self.group_state = GroupState(group_size=group_size, data=self.data, tsp_size=self.tsp_size)
         reward = None
-        done = False
-        return self.group_state, reward, done
+        self.done = False
+        return self.group_state, reward, self.done
 
     def step(self, selected_idx_mat):
         # selected_idx_mat.shape = (batch, group)
@@ -144,18 +139,17 @@ class GroupEnvironment:
         self.group_state.move_to(selected_idx_mat)
 
         # returning values
-        done = (self.group_state.selected_count == self.tsp_size)
-        if done:
+        self.done = (self.group_state.selected_count == self.tsp_size)
+        if self.done:
             reward = -self._get_group_travel_distance()  # note the minus sign!
         else:
             reward = None
-        return self.group_state, reward, done
+        return self.group_state, reward, self.done
 
     def _get_group_travel_distance(self):
         gathering_index = self.group_state.selected_node_list.unsqueeze(3).expand(self.batch_s, -1, self.tsp_size, 2)
         # shape = (batch, group, tsp_size, 2)
         seq_expanded = self.data[:, None, :, :].expand(self.batch_s, self.group_s, self.tsp_size, 2)
-
         ordered_seq = seq_expanded.gather(dim=2, index=gathering_index)
         # shape = (batch, group, tsp_size, 2)
 
@@ -166,3 +160,22 @@ class GroupEnvironment:
         group_travel_distances = segment_lengths.sum(2)
         # size = (batch, group)
         return group_travel_distances
+    
+    def isdone(self):
+        return (self.group_state.selected_count == self.tsp_size)
+    
+
+class BaseState:
+    def __init__(self) -> None:
+        pass
+
+class BaseEnvironment:
+    def __init__(self) -> None:
+        pass
+
+    def isdone(self, state):
+        pass
+
+class TSPEnvironment(BaseEnvironment):
+    def __init__(self) -> None:
+        super().__init__()

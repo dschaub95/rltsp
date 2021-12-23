@@ -7,21 +7,18 @@ import torch
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler 
 
-from utils.torch_objects import Tensor, LongTensor, device
-from utils.utils import Average_Meter
-from utils.data_loader import TSP_DATA_LOADER__RANDOM
-from utils.logging import Get_Logger
-from environment.environment import GroupEnvironment
-from configs.config import get_config
+from main_code.utils.torch_objects import Tensor, LongTensor, device
+from main_code.utils.utils import Average_Meter
+from main_code.utils.data.data_loader import TSP_DATA_LOADER__RANDOM
+from main_code.utils.logging.logging import Get_Logger
+from main_code.environment.environment import GroupEnvironment
+from main_code.utils.config.config import get_config
 
-from nets.pomo import ACTOR
+from main_code.nets.pomo import PomoNetwork
 
 def train(config, 
           save_dir='./logs',
           save_folder_name='train'):
-    np.random.seed(37)
-    random.seed(37)
-    torch.manual_seed(37)
     # Make Log File
     logger, result_folder_path = Get_Logger(save_dir, save_folder_name)
 
@@ -35,7 +32,7 @@ def train(config,
     ############################################################################################################
     ############################################################################################################
     # Objects to Use
-    actor = ACTOR(config).to(device)
+    actor = PomoNetwork(config).to(device)
     actor.optimizer = optim.Adam(actor.parameters(), 
                                  lr=config.ACTOR_LEARNING_RATE, 
                                  weight_decay=config.ACTOR_WEIGHT_DECAY)
@@ -229,6 +226,12 @@ if __name__ == "__main__":
     parser.add_argument("--save_dir", type=str, default='./logs')
     parser.add_argument("--save_folder_name", type=str, default='train')
     opts = parser.parse_known_args()[0]
+    
+    # set seeds 
+    np.random.seed(37)
+    random.seed(37)
+    torch.manual_seed(37)
+
     # get config
     config = get_config(opts.config_path)
     train(config, 

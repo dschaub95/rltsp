@@ -2,11 +2,11 @@ import argparse
 import torch
 import numpy as np
 import random
-from utils.torch_objects import device
-from nets.pomo import ACTOR
-from utils.logging import Get_Logger
-from configs.config import get_config
-from utils.tsp_tester import TSPTester
+from main_code.utils.torch_objects import device
+from main_code.nets.pomo import PomoNetwork
+from main_code.utils.logging.logging import Get_Logger
+from main_code.utils.config.config import get_config
+from main_code.tester.tsp_tester import TSPTester
 
 def test_multiple(test_set_paths=None):
     pass
@@ -45,7 +45,7 @@ if __name__ == "__main__":
     logger, result_folder_path = Get_Logger(opts.save_dir, opts.save_folder_name)
 
     # Load Model
-    actor_group = ACTOR(config).to(device)
+    actor_group = PomoNetwork(config).to(device)
     actor_model_save_path = f'{opts.model_path}/ACTOR_state_dic.pt'
     actor_group.load_state_dict(torch.load(actor_model_save_path, map_location="cuda:0"))
     
