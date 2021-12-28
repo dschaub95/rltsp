@@ -16,32 +16,26 @@ class TSPTester:
     """
     Provides a highlevel testing API, which executes a specified testing protocoll
     """
-    def __init__(self, 
-                 config,
+    def __init__(self,
                  logger,
                  num_trajectories=1,                 
-                 num_nodes=20,
-                 num_samples=1e+4, 
+                 num_nodes=100,
+                 num_samples=10000, 
                  sampling_steps=1, 
                  use_pomo_aug=False,
                  test_set_path=None,
                  test_batch_size=1024,
                  log_period_sec=5) -> None:
         # only relevant when generating test data on the fly
-        self.cfg = config
         self.logger = logger
+        self.log_period_sec = log_period_sec
         self.num_trajectories = np.clip(num_trajectories, 1, num_nodes)
         self.sampling_steps = sampling_steps
         self.use_pomo_aug = use_pomo_aug
         # include for episode update
         if self.use_pomo_aug:
             self.sampling_steps = 8
-    
-        if test_batch_size is None:
-            self.test_batch_size = self.cfg.TEST_BATCH_SIZE
-        else:
-            self.test_batch_size = test_batch_size
-        
+        self.test_batch_size = test_batch_size
         self.test_set_path = test_set_path
         if self.test_set_path is not None:
             self.data_loader = DiskTSPTestDataLoader(test_set_path, self.test_batch_size, self.use_pomo_aug, 
@@ -126,7 +120,7 @@ class TSPTester:
             self.result.avg_approx_error = np.mean(self.result.approx_errors)
             self.result.avg_length = eval_dist_AM_0.peek()
             # do the logging
-            if (time.time()-logger_start > self.cfg.LOG_PERIOD_SEC) or (episode >= self.num_samples):
+            if (time.time()-logger_start > self.log_period_sec) or (episode >= self.num_samples):
                 timestr = time.strftime("%H:%M:%S", time.gmtime(time.time()-timer_start))
                 percent = np.round((episode / self.num_samples) * 100, 1)
                 episode_str = f'{int(episode)}'.zfill(len(str(int(self.num_samples))))

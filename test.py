@@ -45,9 +45,11 @@ if __name__ == "__main__":
     # get config
     config = get_config(opts.config_path)
     # update config based on provided bash arguments
+    config.update({'TEST_BATCH_SIZE': opts.test_batch_size})
     if opts.test_set_path is None:
         config.update({'TSP_SIZE': opts.num_nodes})
     
+
     # Init logger
     logger, result_folder_path = Get_Logger(opts.save_dir, opts.save_folder_name)
 
@@ -61,15 +63,14 @@ if __name__ == "__main__":
     logger.info('==============================================================================')
     logger.info(f'  <<< MODEL: {actor_model_save_path} >>>')
 
-    tester = TSPTester(config,
-                       logger, 
+    tester = TSPTester(logger, 
                        num_trajectories=opts.num_trajectories,                 
                        num_nodes=config.TSP_SIZE,
                        num_samples=opts.test_set_size, 
                        sampling_steps=opts.sampling_steps, 
                        use_pomo_aug=opts.use_pomo_aug,
                        test_set_path=opts.test_set_path,
-                       test_batch_size=opts.test_batch_size)
+                       test_batch_size=config.TEST_BATCH_SIZE)
 
     tester.test(actor_group)
     tester.save_results(file_path=f'{result_folder_path}/result.json')
