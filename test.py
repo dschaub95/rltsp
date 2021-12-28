@@ -2,6 +2,8 @@ import argparse
 import torch
 import numpy as np
 import random
+import os
+import json
 from main_code.utils.torch_objects import device
 from main_code.nets.pomo import PomoNetwork
 from main_code.utils.logging.logging import Get_Logger
@@ -11,6 +13,9 @@ from main_code.tester.tsp_tester import TSPTester
 def test_multiple(test_set_paths=None):
     pass
 
+def main():
+    pass
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_path", type=str, default='./logs/Saved_TSP100_Model')
@@ -18,7 +23,7 @@ if __name__ == "__main__":
     parser.add_argument("--config_path", type=str, default='./configs/default.json')
     # test hyperparmeters -> influence performance
     parser.add_argument("--num_trajectories", type=int, default=1)
-    parser.add_argument('--use_pomo_augmentation', dest='use_pomo_augmentation', default=False, action='store_true')
+    parser.add_argument('--use_pomo_aug', dest='use_pomo_aug', default=False, action='store_true')
     parser.add_argument("--sampling_steps", type=int, default=1)
     # batchsize only relevant for speed, depends on gpu memory
     parser.add_argument("--test_batch_size", type=int, default=1024)
@@ -39,8 +44,10 @@ if __name__ == "__main__":
 
     # get config
     config = get_config(opts.config_path)
-    config.update({'TSP_SIZE': opts.num_nodes})
-
+    # update config based on provided bash arguments
+    if opts.test_set_path is None:
+        config.update({'TSP_SIZE': opts.num_nodes})
+    
     # Init logger
     logger, result_folder_path = Get_Logger(opts.save_dir, opts.save_folder_name)
 
@@ -57,11 +64,12 @@ if __name__ == "__main__":
     tester = TSPTester(config,
                        logger, 
                        num_trajectories=opts.num_trajectories,                 
-                       num_nodes=opts.num_nodes,
+                       num_nodes=config.TSP_SIZE,
                        num_samples=opts.test_set_size, 
                        sampling_steps=opts.sampling_steps, 
-                       use_pomo_augmentation=opts.use_pomo_augmentation,
-                       test_set_path=None,
+                       use_pomo_aug=opts.use_pomo_aug,
+                       test_set_path=opts.test_set_path,
                        test_batch_size=opts.test_batch_size)
 
     tester.test(actor_group)
+    tester.save_results(file_path=f'{result_folder_path}/result.json')
