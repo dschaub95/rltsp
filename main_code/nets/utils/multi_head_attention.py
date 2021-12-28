@@ -17,7 +17,7 @@ def reshape_by_heads(qkv, head_num):
 
     return q_transposed
 
-def multi_head_attention(q, k, v, tsp_size, ninf_mask=None, group_ninf_mask=None):
+def multi_head_attention(q, k, v, ninf_mask=None, group_ninf_mask=None):
     # q shape = (batch_s, head_num, n, key_dim)   : n can be either 1 or TSP_SIZE
     # k,v shape = (batch_s, head_num, TSP_SIZE, key_dim)
     # ninf_mask.shape = (batch_s, TSP_SIZE)
@@ -27,6 +27,7 @@ def multi_head_attention(q, k, v, tsp_size, ninf_mask=None, group_ninf_mask=None
     head_num = q.size(1)
     n = q.size(2)
     key_dim = q.size(3)
+    tsp_size = k.size(2)
 
     score = torch.matmul(q, k.transpose(2, 3))
     # shape = (batch_s, head_num, n, TSP_SIZE)

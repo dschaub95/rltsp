@@ -11,7 +11,6 @@ class MHADecoder(nn.Module):
         self.HEAD_NUM = config.HEAD_NUM
         self.KEY_DIM = config.KEY_DIM
         self.EMBEDDING_DIM = config.EMBEDDING_DIM
-        self.TSP_SIZE = config.TSP_SIZE
         self.LOGIT_CLIPPING = config.LOGIT_CLIPPING
 
         self.Wq_graph = nn.Linear(self.EMBEDDING_DIM, self.HEAD_NUM * self.KEY_DIM, bias=False)
@@ -61,7 +60,7 @@ class MHADecoder(nn.Module):
         q = self.q_graph + self.q_first + q_last
         # shape = (batch_s, HEAD_NUM, group, KEY_DIM)
 
-        out_concat = multi_head_attention(q, self.k, self.v, group_ninf_mask=self.group_ninf_mask, tsp_size=self.TSP_SIZE)
+        out_concat = multi_head_attention(q, self.k, self.v, group_ninf_mask=self.group_ninf_mask)
         # shape = (batch_s, group, HEAD_NUM*KEY_DIM)
 
         mh_atten_out = self.multi_head_combine(out_concat)
