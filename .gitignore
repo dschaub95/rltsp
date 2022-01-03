@@ -5,6 +5,7 @@ results/**
 !results/.gitkeep
 data/**
 !data/.gitkeep
+!data/*.sh
 **/__pycache__
 **/.vscode
 .ipynb_checkpoints
