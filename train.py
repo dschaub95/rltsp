@@ -223,7 +223,7 @@ def validate(config, actor_group, epoch, timer_start, logger):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config_path", type=str, default='./configs/tsp20.json')
-    parser.add_argument("--save_dir", type=str, default='./logs')
+    parser.add_argument("--save_dir", type=str, default='./logs/train')
     parser.add_argument("--save_folder_name", type=str, default='train')
     opts = parser.parse_known_args()[0]
     

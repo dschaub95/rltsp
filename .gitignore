@@ -1,6 +1,7 @@
-logs/*
+logs/test/*
+logs/train/*
 !logs/.gitkeep
-!logs/Saved_TSP100_Model/
+!logs/train/Saved_TSP100_Model/
 results/**
 !results/.gitkeep
 data/**
