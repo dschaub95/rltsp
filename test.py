@@ -2,23 +2,20 @@ import argparse
 import torch
 import numpy as np
 import random
-import os
-import json
+import wandb
 from main_code.utils.torch_objects import device
 from main_code.nets.pomo import PomoNetwork
-from main_code.utils.logging.logging import Get_Logger
-from main_code.utils.config.config import get_config
+from main_code.agents.policy_agent import PolicyAgent
+from main_code.utils.logging.logging import get_test_logger
+from main_code.utils.config.config import Config
 from main_code.tester.tsp_tester import TSPTester
-
-def test_multiple(test_set_paths=None):
-    pass
 
 def main():
     pass
 
-if __name__ == "__main__":
+def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model_path", type=str, default='./logs/Saved_TSP100_Model')
+    parser.add_argument("--model_path", type=str, default='./logs/train/Saved_TSP100_Model')
     # should not be necessary since config should be saved with the model
     parser.add_argument("--config_path", type=str, default='./configs/default.json')
     # test hyperparmeters -> influence performance
@@ -28,14 +25,19 @@ if __name__ == "__main__":
     # batchsize only relevant for speed, depends on gpu memory
     parser.add_argument("--test_batch_size", type=int, default=1024)
     # random test set specifications
-    parser.add_argument("--test_set_size", type=int, default=1e+4)
+    parser.add_argument("--random_test", dest='random_test', default=False, action='store_true')
+    parser.add_argument("--num_samples", type=int, default=10000)
     parser.add_argument("--num_nodes", type=int, default=100)
-    # saved test set path
-    parser.add_argument("--test_set_path", type=str, default=None)
+    parser.add_argument("--tsp_type", type=str, default='uniform') # later add clustered
+    # saved test set
+    parser.add_argument("--test_set", type=str, default='uniform_n_100_10000')
     # save options
-    parser.add_argument("--save_dir", type=str, default='./results')
-    parser.add_argument("--save_folder_name", type=str, default='test')
+    parser.add_argument("--save_dir", type=str, default='./logs/test')
     opts = parser.parse_known_args()[0]
+    return opts
+
+if __name__ == "__main__":
+    opts = parse_args()
     
     # set seeds for reproducibility 
     np.random.seed(37)
@@ -43,34 +45,42 @@ if __name__ == "__main__":
     torch.manual_seed(37)
 
     # get config
-    config = get_config(opts.config_path)
+    config = Config(config_json=opts.config_path, restrictive=False)
+    # create new test subconfig
+    test_config = Config(config_class=opts, restrictive=False)
+    config.test = test_config
     # update config based on provided bash arguments
-    config.update({'TEST_BATCH_SIZE': opts.test_batch_size})
-    if opts.test_set_path is None:
-        config.update({'TSP_SIZE': opts.num_nodes})
+    # check if test shall be random then skip next step
+    if test_config.random_test:
+        test_config.test_set_path = None
+    else:
+        # check whether test set exists if not throw error
+        test_config.test_set_path = f'./data/test_sets/{opts.test_set}'
     
-
     # Init logger
-    logger, result_folder_path = Get_Logger(opts.save_dir, opts.save_folder_name)
-
+    logger, result_folder_path = get_test_logger(test_config)
+    # save config to log folder
+    config.to_yaml(f'{result_folder_path}/config.yml', nested=True)
     # Load Model
     actor_group = PomoNetwork(config).to(device)
     actor_model_save_path = f'{opts.model_path}/ACTOR_state_dic.pt'
     actor_group.load_state_dict(torch.load(actor_model_save_path, map_location="cuda:0"))
-    
+    agent = PolicyAgent(actor_group)
+
+
     # log model info
     logger.info('==============================================================================')
     logger.info('==============================================================================')
     logger.info(f'  <<< MODEL: {actor_model_save_path} >>>')
 
     tester = TSPTester(logger, 
-                       num_trajectories=opts.num_trajectories,                 
-                       num_nodes=config.TSP_SIZE,
-                       num_samples=opts.test_set_size, 
-                       sampling_steps=opts.sampling_steps, 
-                       use_pomo_aug=opts.use_pomo_aug,
-                       test_set_path=opts.test_set_path,
-                       test_batch_size=config.TEST_BATCH_SIZE)
+                       num_trajectories=test_config.num_trajectories,                 
+                       num_nodes=test_config.num_nodes,
+                       num_samples=test_config.num_samples, 
+                       sampling_steps=test_config.sampling_steps, 
+                       use_pomo_aug=test_config.use_pomo_aug,
+                       test_set_path=test_config.test_set_path,
+                       test_batch_size=test_config.test_batch_size)
 
-    tester.test(actor_group)
+    tester.test(agent)
     tester.save_results(file_path=f'{result_folder_path}/result.json')
