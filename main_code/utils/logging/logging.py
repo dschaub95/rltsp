@@ -31,9 +31,20 @@ def prepare_test_result_folder(test_config):
         num_nodes = test_config.num_nodes
         num_samples = test_config.num_samples
     trajs = test_config.num_trajectories
-    ssteps = test_config.sampling_steps
+    
+    if test_config.use_pomo_aug:
+        ssteps = 8
+    else:
+        ssteps = test_config.sampling_steps
+    
     result_folder_no_postfix = f"{save_dir}/{test_set_name}/{time_id}__n_{num_nodes}_{num_samples}_" \
                                f"traj_{trajs}_ssteps_{ssteps}"
+    # add pomo aug identifier
+    if test_config.use_pomo_aug:
+        result_folder_no_postfix = f'{result_folder_no_postfix}_pomo_aug'
+    
+    # if test_config.mcts:
+    #     pass
 
     result_folder_path = result_folder_no_postfix
     folder_idx = 0
