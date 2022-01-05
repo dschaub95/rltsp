@@ -107,8 +107,8 @@ def train_one_epoch(config, actor_group, epoch, timer_start, logger):
 
         group_prob_list = Tensor(np.zeros((batch_s, group_s, 0)))
         while not done:
-            actor_group.update(group_state)
-            action_probs = actor_group.get_action_probabilities()
+            # actor_group.update(group_state)
+            action_probs = actor_group.get_action_probabilities(group_state)
             # shape = (batch, group, TSP_SIZE)
             action = action_probs.reshape(batch_s*group_s, -1).multinomial(1).squeeze(dim=1).reshape(batch_s, group_s)
             # shape = (batch, group)
@@ -194,8 +194,8 @@ def validate(config, actor_group, epoch, timer_start, logger):
             group_state, reward, done = env.step(first_action)
 
             while not done:
-                actor_group.update(group_state)
-                action_probs = actor_group.get_action_probabilities()
+                # actor_group.update(group_state)
+                action_probs = actor_group.get_action_probabilities(group_state)
                 # shape = (batch, group, TSP_SIZE)
                 action = action_probs.argmax(dim=2)
                 # shape = (batch, group)

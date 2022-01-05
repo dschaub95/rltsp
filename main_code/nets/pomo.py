@@ -32,7 +32,7 @@ class PomoNetwork(nn.Module):
     def soft_reset(self, group_state):
         self.node_prob_calculator.reset(self.encoded_nodes, group_ninf_mask=group_state.ninf_mask)
 
-    def update(self, group_state):
+    def get_action_probabilities(self, group_state):
         encoded_LAST_NODES = pick_nodes_for_each_group(self.encoded_nodes, 
                                                        group_state.current_node, 
                                                        self.EMBEDDING_DIM)
@@ -41,8 +41,6 @@ class PomoNetwork(nn.Module):
         probs = self.node_prob_calculator(encoded_LAST_NODES)
         # shape = (batch_s, group, TSP_SIZE)
         self.box_select_probabilities = probs
-
-    def get_action_probabilities(self):
         return self.box_select_probabilities
 
 
