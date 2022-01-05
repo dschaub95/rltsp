@@ -84,10 +84,6 @@ class TSPTester:
                 # do the encoding only once
                 agent.reset(group_state)
 
-                # First Move is given
-                first_action = LongTensor(np.arange(group_s))[None, :].expand(batch_s, group_s)
-                group_state, reward, done = env.step(first_action)
-
                 while not done:
                     action = agent.get_action(group_state)
                     # shape = (batch, group)

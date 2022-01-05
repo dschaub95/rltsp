@@ -11,7 +11,7 @@ class GroupState:
         self.group_s = group_size
         self.data = data
         self.tsp_size = tsp_size
-
+        self.n_actions = tsp_size
         self.reset()
 
     def reset(self):
@@ -81,7 +81,15 @@ class GroupEnvironment:
         self.group_state = GroupState(group_size=group_size, data=self.data, tsp_size=self.tsp_size)
         reward = None
         self.done = False
+
+        # First Move is given
+        first_action = LongTensor(np.arange(self.group_s))[None, :].expand(self.batch_s, self.group_s)
+        self.group_state, reward, self.done = self.step(first_action)
         return self.group_state, reward, self.done
+
+    def initial_state(self, group_size):
+        group_state, reward, done = self.reset(group_size)
+        return group_state
 
     def step(self, selected_idx_mat):
         # selected_idx_mat.shape = (batch, group)
