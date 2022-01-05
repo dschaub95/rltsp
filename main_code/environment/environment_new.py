@@ -27,7 +27,21 @@ class GroupState:
         ####################################
         self.ninf_mask = Tensor(np.zeros((self.batch_s, self.group_s, self.tsp_size)))
         # shape = (batch, group, tsp_size)
+    
+    def transition(self, selected_idx_mat):
+        # selected_idx_mat.shape = (batch, group)
 
+        # History update
+        ####################################
+        self.selected_count += 1
+        self.current_node = selected_idx_mat
+        self.selected_node_list = torch.cat((self.selected_node_list, selected_idx_mat[:, :, None]), dim=2)
+        # Status
+        ####################################
+        batch_idx_mat = torch.arange(self.batch_s)[:, None].expand(self.batch_s, self.group_s)
+        group_idx_mat = torch.arange(self.group_s)[None, :].expand(self.batch_s, self.group_s)
+        self.ninf_mask[batch_idx_mat, group_idx_mat, selected_idx_mat] = -np.inf
+    
     def compute_path_len(self):
         gathering_index = self.selected_node_list.unsqueeze(3).expand(self.batch_s, -1, self.tsp_size, 2)
         # shape = (batch, group, tsp_size, 2)
@@ -42,27 +56,14 @@ class GroupState:
         group_travel_distances = segment_lengths.sum(2)
         # size = (batch, group)
         return group_travel_distances
-
-    def transition(self, selected_idx_mat):
-        # selected_idx_mat.shape = (batch, group)
-
-        # History update
-        ####################################
-        self.selected_count += 1
-        self.current_node = selected_idx_mat
-        self.selected_node_list = torch.cat((self.selected_node_list, selected_idx_mat[:, :, None]), dim=2)
-
-        # Status
-        ####################################
-        batch_idx_mat = torch.arange(self.batch_s)[:, None].expand(self.batch_s, self.group_s)
-        group_idx_mat = torch.arange(self.group_s)[None, :].expand(self.batch_s, self.group_s)
-        self.ninf_mask[batch_idx_mat, group_idx_mat, selected_idx_mat] = -np.inf
     
     @property
     def available_actions(self):
         # return all currently available actions
         full_node_list = LongTensor(np.arange(self.tsp_size))[None, None, :].expand(self.batch_s, self.group_s, self.tsp_size)
-        full_node_list.gather(dim=-1, index=self.selected_node_list)
+        mask = torch.ones_like(full_node_list).scatter_(2, self.selected_node_list, 0.)
+        return full_node_list[mask.bool()].view(self.batch_s, self.group_s, self.tsp_size - self.selected_count)
+        # shape (batch_s, group_s, tsp_size - selected_count)
 
 class GroupEnvironment:
 
@@ -82,7 +83,7 @@ class GroupEnvironment:
         reward = None
         self.done = False
 
-        # First Move is given
+        # First Move is given by default
         first_action = LongTensor(np.arange(self.group_s))[None, :].expand(self.batch_s, self.group_s)
         self.group_state, reward, self.done = self.step(first_action)
         return self.group_state, reward, self.done
