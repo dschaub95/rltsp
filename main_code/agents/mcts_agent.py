@@ -3,6 +3,8 @@ import math
 import random
 import numpy as np
 
+from main_code.agents.base_agent import BaseAgent
+from main_code.environment.environment_new import GroupEnvironment, GroupState
 
 class TreeNode:
     def __init__(self, state, parent, prior_p, q_init=5):
@@ -67,10 +69,9 @@ class TreeNode:
 
 
 class MCTS:
-    def __init__(self, env, device_id, net, c_puct=5, n_playout=400, n_parallel=16, virtual_loss=20, q_init=5):
-        self.env = env
-        self.device_id = device_id
+    def __init__(self, net, c_puct=5, n_playout=400, n_parallel=16, virtual_loss=20, q_init=5):
         self._net = net
+        self._net.eval()
         self._c_puct = c_puct
         self._n_playout = n_playout
         self.n_parallel = n_parallel
@@ -78,8 +79,9 @@ class MCTS:
         self.q_init = q_init
         self._root = None
 
-    def initialize_search(self):
-        state = self.env.initial_state()
+    def initialize_search(self, env):
+        self.env = env
+        state = self.env.initial_state(group_size=1)
         self._root = TreeNode(state, None, 1.0, self.q_init)
 
     def select_leaf(self):
@@ -140,6 +142,7 @@ class MCTS:
 
     def random_rollout(self, state):
         while not self.env.is_done_state(state):
+            # select any available action
             state = self.env.next_state(state, random.choice(list(state['ava_action'])))
 
         return self.env.get_return(state)
@@ -170,7 +173,7 @@ class MCTS:
         max_eval_count = 0
         for leaf in leaves:
             states.append(leaf.state)
-            max_eval_count = max(max_eval_count, leaf.state['n_actions'] - leaf.state['step_idx'])
+            max_eval_count = max(max_eval_count, leaf.state.n_actions - leaf.state.selected_count)
 
         while max_eval_count > 0:
             action_probs = self._eval([state for state in states])
@@ -185,9 +188,9 @@ class MCTS:
         return [self.env.get_return(state) for state in states]
 
     def _eval(self, states):
-        obs = self.env.get_obs_for_states(states)
-        priors = self._net.step(obs, self.device_id)
-        priors = priors.detach().cpu().numpy()
+        # obs = self.env.get_obs_for_states(states)
+        priors = [self._net.get_action_probabilties(state) for state in states]
+        # priors = priors.detach().cpu().numpy()
 
         return priors
 
@@ -208,10 +211,36 @@ class MCTS:
 
 
 class MCTSAgent:
-    def __init__(self, env, device_id, net, c_puct=5, n_playout=400, n_parallel=16, virtual_loss=20, q_init=5):
-        self.mcts = MCTS(env, device_id, net, c_puct, n_playout, n_parallel, virtual_loss, q_init)
+    def __init__(self, env, net, c_puct=5, n_playout=400, n_parallel=16, virtual_loss=20, q_init=5):
+        self.mcts = MCTS(env, net, c_puct, n_playout, n_parallel, virtual_loss, q_init)
         self.mcts.initialize_search()
+        self.model = net
 
+    def eval(self):
+        self.model.eval()
+
+    def reset(self, state):
+        self.model.reset(state)
+
+    def get_action(self):
+        acts, values, states = self.mcts.get_move_values()
+        idx = np.argmin(values)
+        self.mcts.update_with_move(acts[idx], states[idx])
+
+        return acts[idx], values[idx]
+
+class MCTSAgent(BaseAgent):
+    def __init__(self, policy_net, c_puct=5, n_playout=400, n_parallel=16, virtual_loss=20, q_init=5) -> None:
+        super().__init__(policy_net)
+        self.mcts = MCTS(policy_net, c_puct, n_playout, n_parallel, virtual_loss, q_init)
+    
+    def reset(self, state: GroupState):
+        # build new environment based on state
+        env = GroupEnvironment(state.data, state.tsp_size)
+        # initialize the mcts with the seperate environment
+        self.mcts.initialize_search(env)
+        return super().reset(state)
+    
     def get_action(self):
         acts, values, states = self.mcts.get_move_values()
         idx = np.argmin(values)
