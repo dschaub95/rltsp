@@ -136,6 +136,26 @@ class Config:
 
     def to_yaml(self, file_name, nested=True):
         with open(file_name, 'w') as outfile:
-            yaml.dump(self.to_dict(nested=True), outfile, default_flow_style=False)
+            yaml.dump(self.to_dict(nested=nested), outfile, default_flow_style=False)
 
- 
+    def _flatten_dict(self, nested_dict):
+        flattend_dict = dict()
+        for key in nested_dict:
+            if type(nested_dict[key]) == dict:
+                # if sub dict is nested again flatten it
+                flat_sub_dict = self._flatten_dict(nested_dict[key])
+                for sub_key in flat_sub_dict:
+                    key_phrase = '_'.join(key.split('_')[0:-1])
+                    new_key = f'{key_phrase}.{sub_key}'
+                    flattend_dict[new_key] = flat_sub_dict[sub_key]
+            else:
+                flattend_dict[key] = nested_dict[key]
+        return flattend_dict
+
+    def to_flattend_dict(self):
+        # flatten nested dict
+        nested_dict = self.to_dict(nested=True)
+        return self._flatten_dict(nested_dict)
+
+    def __repr__(self):
+        return str(self.to_dict(nested=True))
