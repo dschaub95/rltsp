@@ -24,7 +24,6 @@ class Average_Meter:
         if rank == 0: # assuming "already averaged" Tensor was pushed
             self.sum += some_tensor * n_for_rank_0_tensor
             self.count += n_for_rank_0_tensor
-            
         else:
             self.sum += some_tensor.sum()
             self.count += some_tensor.numel()
