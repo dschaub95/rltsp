@@ -29,7 +29,6 @@ class TSPTester:
         # only relevant when generating test data on the fly
         self.logger = logger
         self.log_period_sec = log_period_sec
-        self.num_trajectories = np.clip(num_trajectories, 1, num_nodes)
         self.sampling_steps = sampling_steps
         self.use_pomo_aug = use_pomo_aug
         # include for episode update
@@ -38,6 +37,9 @@ class TSPTester:
         self.test_batch_size = test_batch_size
         self.test_set_path = test_set_path
         self._prepare_test_set(num_nodes, num_samples)
+        # clip number of trajectories
+        self.num_trajectories = np.clip(num_trajectories, 1, self.num_nodes)
+        
         # implement later
         # self.env = GroupEnvironment()
         self.result = TSPTestResult()
@@ -72,11 +74,11 @@ class TSPTester:
         #     batch_s = batch.size(0)
         #     episode += batch_s / self.sampling_steps
         for node_batch, opt_lens in self.data_loader:
+            # print(opt_lens)
             batch = Tensor(node_batch)
             batch_s = batch.size(0)
             episode += batch_s / self.sampling_steps
             with torch.no_grad():
-                
                 env = GroupEnvironment(batch, self.num_nodes)
                 group_s = self.num_trajectories
                 # get initial group state with specific nodes selected as first nodes in different tours
