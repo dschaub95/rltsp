@@ -43,8 +43,8 @@ def prepare_test_result_folder(test_config):
     if test_config.use_pomo_aug:
         result_folder_no_postfix = f'{result_folder_no_postfix}_pomo_aug'
     
-    # if test_config.mcts:
-    #     pass
+    if test_config.use_mcts:
+        result_folder_no_postfix = f'{result_folder_no_postfix}_mcts'
 
     result_folder_path = result_folder_no_postfix
     folder_idx = 0
