@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+from torch.functional import split
 
 from main_code.utils.torch_objects import BoolTensor, Tensor, LongTensor
 
@@ -43,6 +44,8 @@ class GroupState:
         self.ninf_mask[batch_idx_mat, group_idx_mat, selected_idx_mat] = -np.inf
     
     def compute_path_len(self):
+        # ignore any additional nodes which might be added for batching reasons
+        self.selected_node_list = self.selected_node_list[:, :, 0:self.tsp_size]
         gathering_index = self.selected_node_list.unsqueeze(3).expand(self.batch_s, -1, self.tsp_size, 2)
         # shape = (batch, group, tsp_size, 2)
         seq_expanded = self.data[:, None, :, :].expand(self.batch_s, self.group_s, self.tsp_size, 2)
@@ -57,6 +60,25 @@ class GroupState:
         # size = (batch, group)
         return group_travel_distances
     
+    def split_along_batch_dim(self):
+        split_group_states = []
+        for i in range(self.batch_s):
+            group_state = GroupState(self.group_s, self.data[i].unsqueeze(0), self.tsp_size)
+            group_state.selected_count = self.selected_count
+            group_state.current_node = self.current_node[i].unsqueeze(0).detach().clone()
+            group_state.selected_node_list = self.selected_node_list[i].unsqueeze(0).detach().clone()
+            group_state.ninf_mask = self.ninf_mask[i].unsqueeze(0).detach().clone()
+            split_group_states.append(group_state)
+        return split_group_states
+
+    def copy(self):
+        state_copy = GroupState(self.group_s, self.data, self.tsp_size)
+        state_copy.selected_count = self.selected_count
+        state_copy.current_node = self.current_node.detach().clone()
+        state_copy.selected_node_list = self.selected_node_list.detach().clone()
+        state_copy.ninf_mask = self.ninf_mask.detach().clone()
+        return state_copy
+
     @property
     def available_actions(self):
         # return all currently available actions
@@ -66,7 +88,6 @@ class GroupState:
         # shape (batch_s, group_s, tsp_size - selected_count)
 
 class GroupEnvironment:
-
     def __init__(self, data, tsp_size):
         # seq.shape = (batch, tsp_size, 2)
 
@@ -118,11 +139,11 @@ class GroupEnvironment:
         return (group_state.selected_count == group_state.tsp_size)
     
     @staticmethod
-    def make_transition(group_state: GroupState, action):
+    def next_state(group_state: GroupState, action):
         group_state.transition(action)
         return group_state
 
     @staticmethod
     def get_return(group_state: GroupState):
-        assert group_state.selected_count == group_state.tsp_size
+        # assert group_state.selected_count == group_state.tsp_size
         return -group_state.compute_path_len()
