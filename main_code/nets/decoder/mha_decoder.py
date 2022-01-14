@@ -28,7 +28,8 @@ class MHADecoder(nn.Module):
         self.single_head_key = None  # saved, for single-head attention
         self.group_ninf_mask = None  # reference to ninf_mask owned by state
 
-    def reset(self, encoded_nodes, group_ninf_mask):
+    def reset(self, encoded_nodes, group_ninf_mask=None):
+        # this function saves some time by making some operations only once after a new graph was encoded
         # encoded_nodes.shape = (batch_s, TSP_SIZE, EMBEDDING_DIM)
 
         encoded_graph = encoded_nodes.mean(dim=1, keepdim=True)
@@ -45,7 +46,7 @@ class MHADecoder(nn.Module):
         self.group_ninf_mask = group_ninf_mask
         # shape = (batch_s, group, TSP_SIZE)
 
-    def forward(self, encoded_LAST_NODE):
+    def forward(self, encoded_LAST_NODE, group_ninf_mask):
         # encoded_LAST_NODE.shape = (batch_s, group, EMBEDDING_DIM)
 
         if self.q_first is None:
@@ -60,7 +61,7 @@ class MHADecoder(nn.Module):
         q = self.q_graph + self.q_first + q_last
         # shape = (batch_s, HEAD_NUM, group, KEY_DIM)
 
-        out_concat = multi_head_attention(q, self.k, self.v, group_ninf_mask=self.group_ninf_mask)
+        out_concat = multi_head_attention(q, self.k, self.v, group_ninf_mask=group_ninf_mask)
         # shape = (batch_s, group, HEAD_NUM*KEY_DIM)
 
         mh_atten_out = self.multi_head_combine(out_concat)
@@ -75,8 +76,8 @@ class MHADecoder(nn.Module):
         # shape = (batch_s, group, TSP_SIZE)
 
         score_clipped = self.LOGIT_CLIPPING * torch.tanh(score_scaled)
-
-        score_masked = score_clipped + self.group_ninf_mask.clone()
+        
+        score_masked = score_clipped + group_ninf_mask.clone()
 
         probs = F.softmax(score_masked, dim=2)
         # shape = (batch_s, group, TSP_SIZE)
