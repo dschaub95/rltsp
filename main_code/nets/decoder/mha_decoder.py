@@ -46,16 +46,16 @@ class MHADecoder(nn.Module):
         self.group_ninf_mask = group_ninf_mask
         # shape = (batch_s, group, TSP_SIZE)
 
-    def forward(self, encoded_LAST_NODE, group_ninf_mask):
-        # encoded_LAST_NODE.shape = (batch_s, group, EMBEDDING_DIM)
+    def forward(self, encoded_first_node, encoded_last_node, group_ninf_mask):
+        # encoded_last_node.shape = (batch_s, group, EMBEDDING_DIM)
 
         if self.q_first is None:
-            self.q_first = reshape_by_heads(self.Wq_first(encoded_LAST_NODE), head_num=self.HEAD_NUM)
+            self.q_first = reshape_by_heads(self.Wq_first(encoded_first_node), head_num=self.HEAD_NUM)
         # shape = (batch_s, HEAD_NUM, group, KEY_DIM)
 
         #  Multi-Head Attention
         #######################################################
-        q_last = reshape_by_heads(self.Wq_last(encoded_LAST_NODE), head_num=self.HEAD_NUM)
+        q_last = reshape_by_heads(self.Wq_last(encoded_last_node), head_num=self.HEAD_NUM)
         # shape = (batch_s, HEAD_NUM, group, KEY_DIM)
 
         q = self.q_graph + self.q_first + q_last
