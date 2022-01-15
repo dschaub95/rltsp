@@ -6,7 +6,7 @@ import wandb
 from main_code.utils.torch_objects import device
 from main_code.nets.pomo import PomoNetwork
 from main_code.agents.policy_agent import PolicyAgent
-from main_code.agents.mcts_agent import MCTSAgent
+from main_code.agents.mcts_agent import MCTSAgent, MCTSBatchAgent
 from main_code.utils.logging.logging import get_test_logger
 from main_code.utils.config.config import Config
 from main_code.tester.tsp_tester import TSPTester
@@ -24,6 +24,9 @@ def parse_args():
     parser.add_argument('--use_pomo_aug', dest='use_pomo_aug', default=False, action='store_true')
     parser.add_argument("--sampling_steps", type=int, default=1)
     parser.add_argument("--use_mcts", dest='use_mcts', default=False, action='store_true')
+    parser.add_argument("--num_playouts", type=int, default=10)
+    parser.add_argument("--c_puct", type=float, default=5.0)
+    parser.add_argument("--num_parallel", type=int, default=1)
     # batchsize only relevant for speed, depends on gpu memory
     parser.add_argument("--test_batch_size", type=int, default=1024)
     # random test set specifications
@@ -32,7 +35,7 @@ def parse_args():
     parser.add_argument("--num_nodes", type=int, default=100)
     parser.add_argument("--tsp_type", type=str, default='uniform') # later add clustered
     # saved test set
-    parser.add_argument("--test_set", type=str, default='uniform_n_20_10000')
+    parser.add_argument("--test_set", type=str, default='uniform_n_20_128')
     # save options
     parser.add_argument("--save_dir", type=str, default='./logs/test')
     opts = parser.parse_known_args()[0]
@@ -62,9 +65,7 @@ if __name__ == "__main__":
     # adjust settings for mcts
     if test_config.use_mcts:
         test_config.num_trajectories = 1
-        test_config.test_batch_size = 1
-        test_config.sampling_steps = 1
-        test_config.use_pomo_aug = False
+        test_config.test_batch_size = test_config.sampling_steps
 
     # Init logger
     logger, result_folder_path = get_test_logger(test_config)
@@ -78,7 +79,8 @@ if __name__ == "__main__":
     
     # select the agent
     if test_config.use_mcts:
-        agent = MCTSAgent(actor_group)
+        # agent = MCTSAgent(actor_group)
+        agent = MCTSBatchAgent(actor_group, c_puct=test_config.c_puct, n_playout=test_config.num_playouts, n_parallel=test_config.num_parallel)
     else:
         agent = PolicyAgent(actor_group)
 
