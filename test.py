@@ -65,7 +65,7 @@ if __name__ == "__main__":
     # adjust settings for mcts
     if test_config.use_mcts:
         test_config.num_trajectories = 1
-        test_config.test_batch_size = test_config.sampling_steps
+        test_config.test_batch_size = 8 if test_config.use_pomo_aug else test_config.sampling_steps
 
     # Init logger
     logger, result_folder_path = get_test_logger(test_config)
