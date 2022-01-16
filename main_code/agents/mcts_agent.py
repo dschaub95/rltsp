@@ -3,7 +3,7 @@ import math
 import random
 import numpy as np
 import torch
-
+from main_code.utils.torch_objects import FloatTensor, device
 from main_code.agents.base_agent import BaseAgent
 from main_code.environment.environment_new import GroupEnvironment, GroupState
 
@@ -14,8 +14,10 @@ class TreeNode:
         self._children = {}
         self._n_visits = 0
         # leaf value or expected leaf return
+        # self._Q = torch.tensor(q_init, device=device)
         self._Q = q_init
         self._u = 0
+        # self._P = torch.tensor(prior_p, device=device)
         self._P = prior_p
         self.q_init = q_init
         self.max_Q = q_init
@@ -29,13 +31,11 @@ class TreeNode:
 
     def expand(self, actions, priors, states):
         # fully expands a leaf considering all possible actions in this state
-        # convert tensors to suitable formats
-        # actions is permuted before
         # priors
-        priors = priors.cpu().numpy().squeeze((0, 1))
-        for (action, prob, state) in zip(actions, priors, states):
-            # permute dimensions again (only useful for batches)
-            action = action.permute(1, 0)
+        # priors = priors.cpu().numpy().squeeze((0, 1))
+        for i, state in enumerate(states):
+            action = actions[:,:,i]
+            prob = float(priors[:,:,i].max(dim=1)[0].mean(dim=0))
             if action not in self._children:
                 self._children[action] = TreeNode(state.copy(), self, prob, self.q_init)
 
@@ -67,16 +67,17 @@ class TreeNode:
         self.min_Q = leaf_value if leaf_value < self.min_Q else self.min_Q
 
     def update_recursive(self, leaf_value):
-        leaf_value = float(leaf_value)
+        # max over trajectories and mean over batch for now
         if self._parent:
             self._parent.update_recursive(leaf_value)
+        leaf_value = float(leaf_value.max(dim=-1)[0].mean(dim=-1))
         self.update(leaf_value)
 
     def get_value(self, c_puct, max_value, min_value, mean_value):
         # compute value for selection, higher is better
         self._u = (c_puct * self._P * math.sqrt(self._parent._n_visits + 1) / (1 + self._n_visits))
         if max_value - min_value == 0:
-            value = -self._Q + self._u
+            value = self._Q + self._u
         else:
             value = -(self._Q - mean_value) / (max_value - min_value) + self._u
         # print(value)
@@ -161,13 +162,14 @@ class MCTS:
                 leaf.update_recursive(value)
                 ### expand node considering all possible actions
                 available_actions = leaf.state.available_actions
+                num_ava_actions = available_actions.size(-1)
                 # gather the probabilities for all the available actions
+                # shape (batch_s, group_s, num_ava_actions)
                 prior = torch.gather(ps, -1, available_actions)
-                permuted_available_actions = available_actions.permute(2, 1, 0)
                 # compute all possible states based on the available actions
-                next_states = [self.env.next_state(leaf.state.copy(), act.permute(1, 0)) for act in permuted_available_actions]
+                next_states = [self.env.next_state(leaf.state.copy(), available_actions[:,:,i]) for i in range(num_ava_actions)]
                 # expand all the leaves (each leave will be fully expanded)
-                leaf.expand(permuted_available_actions, prior, next_states)
+                leaf.expand(available_actions, prior, next_states)
 
     def evaluate_leaves(self, leaves):
         # result = []
