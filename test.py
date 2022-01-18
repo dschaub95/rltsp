@@ -79,8 +79,8 @@ if __name__ == "__main__":
     
     # select the agent
     if test_config.use_mcts:
-        # agent = MCTSAgent(actor_group, c_puct=test_config.c_puct, n_playout=test_config.num_playouts, n_parallel=test_config.num_parallel)
-        agent = MCTSBatchAgent(actor_group, c_puct=test_config.c_puct, n_playout=test_config.num_playouts, n_parallel=test_config.num_parallel)
+        agent = MCTSAgent(actor_group, c_puct=test_config.c_puct, n_playout=test_config.num_playouts, n_parallel=test_config.num_parallel)
+        # agent = MCTSBatchAgent(actor_group, c_puct=test_config.c_puct, n_playout=test_config.num_playouts, n_parallel=test_config.num_parallel)
     else:
         agent = PolicyAgent(actor_group)
 

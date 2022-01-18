@@ -35,7 +35,7 @@ class TreeNode:
         # priors = priors.cpu().numpy().squeeze((0, 1))
         for i, state in enumerate(states):
             action = actions[:,:,i]
-            prob = float(priors[:,:,i].max(dim=1)[0].mean(dim=0))
+            prob = float(priors[:,:,i].mean(dim=1)[0].mean(dim=0))
             if action not in self._children:
                 self._children[action] = TreeNode(state.copy(), self, prob, self.q_init)
 
@@ -70,12 +70,15 @@ class TreeNode:
         # max over trajectories and mean over batch for now
         if self._parent:
             self._parent.update_recursive(leaf_value)
-        leaf_value = float(leaf_value.max(dim=-1)[0].mean(dim=-1))
+        leaf_value = float(leaf_value.max(dim=-1)[0].max(dim=-1)[0])
         self.update(leaf_value)
 
     def get_value(self, c_puct, max_value, min_value, mean_value):
         # compute value for selection, higher is better
         self._u = (c_puct * self._P * math.sqrt(self._parent._n_visits + 1) / (1 + self._n_visits))
+        # alpha zero variant of puct
+        # self._u = c_puct * self._P * math.sqrt(self._parent._n_visits) / (1 + self._n_visits)
+        # this needs refinement
         if max_value - min_value == 0:
             value = self._Q + self._u
         else:
@@ -165,7 +168,9 @@ class MCTS:
                 num_ava_actions = available_actions.size(-1)
                 # gather the probabilities for all the available actions
                 # shape (batch_s, group_s, num_ava_actions)
-                prior = torch.gather(ps, -1, available_actions)
+                prior = torch.gather(ps, dim=-1, index=available_actions)
+                prior, indices = torch.sort(prior, dim=-1, descending=True)
+                available_actions = torch.gather(available_actions, dim=-1, index=indices)
                 # compute all possible states based on the available actions
                 next_states = [self.env.next_state(leaf.state.copy(), available_actions[:,:,i]) for i in range(num_ava_actions)]
                 # expand all the leaves (each leave will be fully expanded)
@@ -271,11 +276,18 @@ class MCTSAgent(BaseAgent):
         self.mcts = MCTS(policy_net, c_puct, n_playout, n_parallel, virtual_loss, q_init)
     
     def reset(self, state: GroupState):
+        # set different q_init for different tsp size
+        if state.tsp_size == 20:
+            self.mcts.q_init = -5
+        elif state.tsp_size == 50:
+            self.mcts.q_init = -7
+        elif state.tsp_size == 100:
+            self.mcts.q_init = -10 
         # init new environment model based on state
         # handle data batch sequentially for now
         env = GroupEnvironment(state.data, state.tsp_size)
         # initialize the mcts with the seperate environment model and return the starting state
-        state = self.mcts.initialize_search(env)
+        state = self.mcts.initialize_search(env, group_size=state.group_s)
         # reset the network and encode nodes once for this state
         super().reset(state)
     
@@ -306,6 +318,13 @@ class MCTSBatchAgent(BaseAgent):
         self.q_init = q_init
     
     def reset(self, state: GroupState):
+        # set different q_init for different tsp size
+        if state.tsp_size == 20:
+            self.q_init = -5
+        elif state.tsp_size == 50:
+            self.q_init = -7
+        elif state.tsp_size == 100:
+            self.q_init = -10        
         # make batch calculation for the encoded nodes
         self.model.reset(state)
         self.encoded_nodes_list = [encoded_nodes.unsqueeze(0) for encoded_nodes in self.model.encoded_nodes]
