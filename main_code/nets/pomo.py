@@ -34,11 +34,15 @@ class PomoNetwork(nn.Module):
         self.encoded_nodes = encoded_nodes
         self.node_prob_calculator.reset(self.encoded_nodes)
 
-    def get_action_probabilities(self, group_state):
-        encoded_last_nodes = pick_nodes_for_each_group(self.encoded_nodes, 
+    def get_action_probabilities(self, group_state, encoded_nodes=None):
+        # define optional input of encoded nodes
+        if encoded_nodes is None:
+            encoded_nodes = self.encoded_nodes
+
+        encoded_last_nodes = pick_nodes_for_each_group(encoded_nodes, 
                                                        group_state.current_node, 
                                                        self.EMBEDDING_DIM)
-        encoded_first_nodes = pick_nodes_for_each_group(self.encoded_nodes,
+        encoded_first_nodes = pick_nodes_for_each_group(encoded_nodes,
                                                         group_state.selected_node_list[:,:,0],
                                                         self.EMBEDDING_DIM)
         # shape = (batch_s, group, EMBEDDING_DIM)
