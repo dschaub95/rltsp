@@ -31,7 +31,7 @@ class TreeNode:
         else:
             self.depth = parent.depth + 1
 
-    def expand(self, actions, priors, states):
+    def expand(self, actions, priors, states=None):
         # fully expands a leaf considering all possible actions in this state
         # modify probabilitiy vector to favor exploration here
         probs_0 = priors.mean(dim=1).mean(dim=0).detach().cpu().numpy()
@@ -45,11 +45,11 @@ class TreeNode:
             # use dirichlet approach as in alpha zero paper
             # probs = (1 - self.epsilon) * probs_0 + self.epsilon * np.random.dirichlet([1 for i in range(probs_0.shape[0])])
             pass
-        for i, state in enumerate(states):
+        for i, prob in enumerate(probs):
             action = actions[:,:,i]
-            prob = probs[i]
+            # state = states[i]
             if action not in self._children:
-                self._children[action] = TreeNode(state.copy(), self, prob, self.q_init, orig_prob=probs_0[i])
+                self._children[action] = TreeNode(None, self, prob, self.q_init, orig_prob=probs_0[i])
 
     def select(self, c_puct):
         # select the best child
@@ -103,12 +103,14 @@ class TreeNode:
         self._u = c_puct * self._P * math.sqrt(self._parent._n_visits) / (1 + self._n_visits)
         if max_value - min_value == 0:
             # q = self._Q
-            # assign zero if the parent node has been explored, but without improving upon the initial value
+            # assign zero if the parent node (and potentially sub nodes) have been explored, 
+            # but giving a return not worse or better than the leaf calculated after first selection
             q = 0
         else:
             # q = -(self._Q - mean_value) / (max_value - min_value)
             # q = np.clip((self._Q - mean_value) / (max_value - min_value), 0, 1)
             q = (self._Q - mean_value) / (max_value - min_value)
+            # q = 1 - (max_value - self._Q) / (max_value - min_value) # in [0,1]
         # print(q, self._Q, mean_value)
         value = q + self._u
         # print(value)
@@ -156,11 +158,18 @@ class MCTS:
 
     def select_leaf(self):
         current = self._root
+        # copy root state and modify during selection to yield leaf state
+        leaf_state = self._root.state.copy()
+        # print(self.cur_playout)
         while True:
             if current.is_leaf():
                 break
-            _, current = current.select(self._c_puct)
-
+            act, current = current.select(self._c_puct)
+            leaf_state = self.env.next_state(leaf_state, act)
+            # print(act)
+            # print(current.state.selected_node_list)
+            # print(leaf_state.selected_node_list)
+        current.state = leaf_state
         return current
 
     def _playout(self, num_parallel):
@@ -223,19 +232,23 @@ class MCTS:
                 prior, indices = torch.sort(prior, dim=-1, descending=True)
                 available_actions = torch.gather(available_actions, dim=-1, index=indices)
                 # compute all possible states based on the available actions
-                next_states = [self.env.next_state(leaf.state.copy(), available_actions[:,:,i]) for i in range(num_ava_actions)]
+                # next_states = [self.env.next_state(leaf.state, available_actions[:,:,i]) for i in range(num_ava_actions)]
                 # expand all the leaves (each leave will be fully expanded)
-                leaf.expand(available_actions, prior, next_states)
+                leaf.expand(available_actions, prior)#, next_states)
+                # delete state
+                if leaf is not self._root:
+                    del leaf.state
+                    leaf.state = None
 
     def evaluate_leaves(self, leaves):
         # conversion to multi state
         multi_state = MultiGroupState([leaf.state.copy() for leaf in leaves])
         # potentially prepare net
         self.prepare_net(len(leaves))
-        values = self._value_func(multi_state)
+        values, priors = self._value_func(multi_state)
         # restore net encoded nodes
         self._net.encoded_nodes = self._net.encoded_nodes[0:multi_state.single_batch_s,:,:]
-        return values
+        return values, priors
         # return self.value_func(leaves)
         # result = []
         # for leaf in leaves:
@@ -252,7 +265,8 @@ class MCTS:
         # not used when we have given policy since policy can approximate the value by just taking actions
         while not self.env.is_done_state(state):
             # select any available action
-            state = self.env.next_state(state, random.choice(list(state['ava_action'])))
+            random_action = 0
+            state = self.env.next_state(state, random_action)
 
         return self.env.get_return(state)
 
@@ -346,11 +360,14 @@ class MCTS:
         act_values_states = [(act, node._Q, node.state, node._P) for act, node in self._root._children.items()]
         return zip(*act_values_states)
 
-    def update_with_move(self, last_move, last_state):
+    def update_with_move(self, last_move):
         self.step += 1
         # delete all nodes that are not used anymore and keep the ones which are used
+        last_state = self.env.next_state(self._root.state, last_move)
         if last_move in self._root._children:
             self._root = self._root._children[last_move]
+            self._root.state = last_state
+            # transition root state based on action and save in new state
             self._root._parent = None
         else:
             self._root = TreeNode(last_state, None, 1.0, self.q_init)
@@ -390,7 +407,7 @@ class MCTSAgent(BaseAgent):
         # print(values)
         # print(priors)
         # update mcts tree
-        self.mcts.update_with_move(acts[idx], states[idx])
+        self.mcts.update_with_move(acts[idx])
         # print(values)
         # if self.mcts.step >= 19:
         #     print(self.mcts.exploration_rating)
@@ -436,7 +453,7 @@ class MCTSBatchAgent(BaseAgent):
             # print(values)
             idx = np.argmax(values)
             # update mcts tree
-            mcts.update_with_move(acts[idx], states[idx])
+            mcts.update_with_move(acts[idx])
             batch_action.append(acts[idx])
         batch_action = torch.cat(batch_action, dim=0)
         return batch_action
