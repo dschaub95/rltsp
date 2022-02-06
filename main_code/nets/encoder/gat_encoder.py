@@ -3,15 +3,21 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-from main_code.nets.utils.multi_head_attention import reshape_by_heads, multi_head_attention
+from main_code.nets.utils.multi_head_attention import (
+    reshape_by_heads,
+    multi_head_attention,
+)
 
 # taken from Joshi et al.
+
 
 class Encoder(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.embedding = nn.Linear(2, config.EMBEDDING_DIM)
-        self.layers = nn.ModuleList([Encoder_Layer(config) for _ in range(config.ENCODER_LAYER_NUM)])
+        self.layers = nn.ModuleList(
+            [Encoder_Layer(config) for _ in range(config.ENCODER_LAYER_NUM)]
+        )
 
     def forward(self, data):
         # data.shape = (batch_s, TSP_SIZE, 2)
@@ -34,10 +40,18 @@ class Encoder_Layer(nn.Module):
         self.EMBEDDING_DIM = config.EMBEDDING_DIM
         self.FF_HIDDEN_DIM = config.FF_HIDDEN_DIM
 
-        self.Wq = nn.Linear(self.EMBEDDING_DIM, self.HEAD_NUM * self.KEY_DIM, bias=False)
-        self.Wk = nn.Linear(self.EMBEDDING_DIM, self.HEAD_NUM * self.KEY_DIM, bias=False)
-        self.Wv = nn.Linear(self.EMBEDDING_DIM, self.HEAD_NUM * self.KEY_DIM, bias=False)
-        self.multi_head_combine = nn.Linear(self.HEAD_NUM * self.KEY_DIM, self.EMBEDDING_DIM)
+        self.Wq = nn.Linear(
+            self.EMBEDDING_DIM, self.HEAD_NUM * self.KEY_DIM, bias=False
+        )
+        self.Wk = nn.Linear(
+            self.EMBEDDING_DIM, self.HEAD_NUM * self.KEY_DIM, bias=False
+        )
+        self.Wv = nn.Linear(
+            self.EMBEDDING_DIM, self.HEAD_NUM * self.KEY_DIM, bias=False
+        )
+        self.multi_head_combine = nn.Linear(
+            self.HEAD_NUM * self.KEY_DIM, self.EMBEDDING_DIM
+        )
 
         self.addAndNormalization1 = Add_And_Normalization_Module(config)
         self.feedForward = Feed_Forward_Module(self.EMBEDDING_DIM, self.FF_HIDDEN_DIM)
@@ -63,6 +77,7 @@ class Encoder_Layer(nn.Module):
 
         return out3
 
+
 class Add_And_Normalization_Module(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -76,7 +91,9 @@ class Add_And_Normalization_Module(nn.Module):
         batch_s = input1.size(0)
         tsp_size = input1.size(1)
         added = input1 + input2
-        normalized = self.norm_by_EMB(added.reshape(batch_s * tsp_size, self.EMBEDDING_DIM))
+        normalized = self.norm_by_EMB(
+            added.reshape(batch_s * tsp_size, self.EMBEDDING_DIM)
+        )
 
         return normalized.reshape(batch_s, tsp_size, self.EMBEDDING_DIM)
 

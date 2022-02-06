@@ -18,7 +18,15 @@ class AGNNLayer(nn.Module):
         - V. P. Dwivedi, C. K. Joshi, T. Laurent, Y. Bengio, and X. Bresson. Benchmarking graph neural networks. arXiv preprint arXiv:2003.00982, 2020.
     """
 
-    def __init__(self, hidden_dim, aggregation="sum", norm="batch", learn_norm=True, track_norm=False, gated=True):
+    def __init__(
+        self,
+        hidden_dim,
+        aggregation="sum",
+        norm="batch",
+        learn_norm=True,
+        track_norm=False,
+        gated=True,
+    ):
         """
         Args:
             hidden_dim: Hidden dimension size (int)
@@ -36,7 +44,7 @@ class AGNNLayer(nn.Module):
         self.track_norm = track_norm
         self.gated = gated
         assert self.gated, "Use gating with GCN, pass the `--gated` flag"
-        
+
         self.U = nn.Linear(hidden_dim, hidden_dim, bias=True)
         self.V = nn.Linear(hidden_dim, hidden_dim, bias=True)
         self.A = nn.Linear(hidden_dim, hidden_dim, bias=True)
@@ -45,21 +53,25 @@ class AGNNLayer(nn.Module):
 
         self.norm_h = {
             "layer": nn.LayerNorm(hidden_dim, elementwise_affine=learn_norm),
-            "batch": nn.BatchNorm1d(hidden_dim, affine=learn_norm, track_running_stats=track_norm)
+            "batch": nn.BatchNorm1d(
+                hidden_dim, affine=learn_norm, track_running_stats=track_norm
+            ),
         }.get(self.norm, None)
 
         self.norm_e = {
             "layer": nn.LayerNorm(hidden_dim, elementwise_affine=learn_norm),
-            "batch": nn.BatchNorm1d(hidden_dim, affine=learn_norm, track_running_stats=track_norm)
+            "batch": nn.BatchNorm1d(
+                hidden_dim, affine=learn_norm, track_running_stats=track_norm
+            ),
         }.get(self.norm, None)
-        
+
     def forward(self, h, e, graph):
         """
         Args:
             h: Input node features (B x V x H)
             e: Input edge features (B x V x V x H)
             graph: Graph adjacency matrices (B x V x V)
-        Returns: 
+        Returns:
             Updated node and edge features
         """
         batch_size, num_nodes, hidden_dim = h.shape
@@ -83,14 +95,22 @@ class AGNNLayer(nn.Module):
         h = Uh + self.aggregate(Vh, graph, gates)  # B x V x H
 
         # Normalize node features
-        h = self.norm_h(
-            h.view(batch_size*num_nodes, hidden_dim)
-        ).view(batch_size, num_nodes, hidden_dim) if self.norm_h else h
-        
+        h = (
+            self.norm_h(h.view(batch_size * num_nodes, hidden_dim)).view(
+                batch_size, num_nodes, hidden_dim
+            )
+            if self.norm_h
+            else h
+        )
+
         # Normalize edge features
-        e = self.norm_e(
-            e.view(batch_size*num_nodes*num_nodes, hidden_dim)
-        ).view(batch_size, num_nodes, num_nodes, hidden_dim) if self.norm_e else e
+        e = (
+            self.norm_e(e.view(batch_size * num_nodes * num_nodes, hidden_dim)).view(
+                batch_size, num_nodes, num_nodes, hidden_dim
+            )
+            if self.norm_e
+            else e
+        )
 
         # Apply non-linearity
         h = F.relu(h)
@@ -113,42 +133,55 @@ class AGNNLayer(nn.Module):
         """
         # Perform feature-wise gating mechanism
         Vh = gates * Vh  # B x V x V x H
-        
+
         # Enforce graph structure through masking
         mask = graph.unsqueeze(-1).expand_as(Vh)
         Vh[mask] = 0
-        
+
         if self.aggregation == "mean":
-            return torch.sum(Vh, dim=2) / torch.sum(1-graph, dim=2).unsqueeze(-1).type_as(Vh)
-        
+            return torch.sum(Vh, dim=2) / torch.sum(1 - graph, dim=2).unsqueeze(
+                -1
+            ).type_as(Vh)
+
         elif self.aggregation == "max":
             return torch.max(Vh, dim=2)[0]
-        
+
         else:
             return torch.sum(Vh, dim=2)
-        
+
 
 class AGNNEncoder(nn.Module):
-    """Configurable GNN Encoder
-    """
-    
-    def __init__(self, n_layers, hidden_dim, aggregation="sum", norm="layer", 
-                 learn_norm=True, track_norm=False, gated=True, *args, **kwargs):
+    """Configurable GNN Encoder"""
+
+    def __init__(
+        self,
+        n_layers,
+        hidden_dim,
+        aggregation="sum",
+        norm="layer",
+        learn_norm=True,
+        track_norm=False,
+        gated=True,
+        *args,
+        **kwargs
+    ):
         super(AGNNEncoder, self).__init__()
 
         self.init_embed_edges = nn.Embedding(2, hidden_dim)
 
-        self.layers = nn.ModuleList([
-            AGNNLayer(hidden_dim, aggregation, norm, learn_norm, track_norm, gated)
+        self.layers = nn.ModuleList(
+            [
+                AGNNLayer(hidden_dim, aggregation, norm, learn_norm, track_norm, gated)
                 for _ in range(n_layers)
-        ])
+            ]
+        )
 
     def forward(self, x, graph):
         """
         Args:
             x: Input node features (B x V x H)
             graph: Graph adjacency matrices (B x V x V)
-        Returns: 
+        Returns:
             Updated node features (B x V x H)
         """
         # Embed edge features

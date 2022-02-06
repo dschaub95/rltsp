@@ -10,6 +10,8 @@ FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
 LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
 ByteTensor = torch.cuda.ByteTensor if use_cuda else torch.ByteTensor
 BoolTensor = torch.cuda.BoolTensor if use_cuda else torch.BoolTensor
+# IntTensor = torch.cuda.IntTensor if use_cuda else torch.IntTensor
+# ShortTensor = torch.cuda.ShortTensor if use_cuda else torch.ShortTensor
 Tensor = FloatTensor
 
 if use_cuda:

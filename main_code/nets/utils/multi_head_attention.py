@@ -17,6 +17,7 @@ def reshape_by_heads(qkv, head_num):
 
     return q_transposed
 
+
 def multi_head_attention(q, k, v, ninf_mask=None, group_ninf_mask=None):
     # q shape = (batch_s, head_num, n, key_dim)   : n can be either 1 or TSP_SIZE
     # k,v shape = (batch_s, head_num, TSP_SIZE, key_dim)
@@ -34,9 +35,13 @@ def multi_head_attention(q, k, v, ninf_mask=None, group_ninf_mask=None):
 
     score_scaled = score / np.sqrt(key_dim)
     if ninf_mask is not None:
-        score_scaled = score_scaled + ninf_mask[:, None, None, :].expand(batch_s, head_num, n, tsp_size)
+        score_scaled = score_scaled + ninf_mask[:, None, None, :].expand(
+            batch_s, head_num, n, tsp_size
+        )
     if group_ninf_mask is not None:
-        score_scaled = score_scaled + group_ninf_mask[:, None, :, :].expand(batch_s, head_num, n, tsp_size)
+        score_scaled = score_scaled + group_ninf_mask[:, None, :, :].expand(
+            batch_s, head_num, n, tsp_size
+        )
 
     weights = nn.Softmax(dim=3)(score_scaled)
     # shape = (batch_s, head_num, n, TSP_SIZE)

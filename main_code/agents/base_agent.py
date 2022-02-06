@@ -1,10 +1,7 @@
-
-
-
 class BaseAgent:
     def __init__(self, net) -> None:
         self.model = net
-    
+
     def eval(self):
         self.model.eval()
 
@@ -13,5 +10,3 @@ class BaseAgent:
 
     def get_action(self, state):
         raise NotImplementedError
-    
-    

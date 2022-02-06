@@ -6,6 +6,7 @@ from itertools import combinations, product
 import math
 import random
 
+
 def get_group_travel_distances_sampling(selected_node_list, data, sampling_steps):
     """
     Calculates the travel distance for any number of samples tours (also 1)
@@ -24,7 +25,11 @@ def get_group_travel_distances_sampling(selected_node_list, data, sampling_steps
     gathering_index = selected_node_list.unsqueeze(3).expand(batch_s, -1, tsp_size, 2)
     # shape = (batch, group, tsp_size, 2)
     # select only the original problems based on number of sampling steps
-    orig_data = data[::sampling_steps, None, :, :].expand(-1, sampling_steps, tsp_size, 2).clone()
+    orig_data = (
+        data[::sampling_steps, None, :, :]
+        .expand(-1, sampling_steps, tsp_size, 2)
+        .clone()
+    )
     # reshape data
     orig_data = torch.reshape(orig_data, (-1, tsp_size, 2))
     seq_expanded = orig_data[:, None, :, :].expand(batch_s, group_s, tsp_size, 2)
@@ -33,12 +38,13 @@ def get_group_travel_distances_sampling(selected_node_list, data, sampling_steps
     # shape = (batch, group, tsp_size, 2)
 
     rolled_seq = ordered_seq.roll(dims=2, shifts=-1)
-    segment_lengths = ((ordered_seq-rolled_seq)**2).sum(3).sqrt()
+    segment_lengths = ((ordered_seq - rolled_seq) ** 2).sum(3).sqrt()
     # size = (batch, group, tsp_size)
 
     group_travel_distances = segment_lengths.sum(2)
     # size = (batch, group)
     return -1 * group_travel_distances
+
 
 def augment_xy_data_by_8_fold(xy_data):
     # xy_data.shape = (batch_s, problem, 2)
@@ -46,23 +52,25 @@ def augment_xy_data_by_8_fold(xy_data):
     y = xy_data[:, :, [1]]
     # x,y shape = (batch, problem, 1)
     dat1 = torch.cat((x, y), dim=2)
-    dat2 = torch.cat((1-x, y), dim=2)
-    dat3 = torch.cat((x, 1-y), dim=2)
-    dat4 = torch.cat((1-x, 1-y), dim=2)
+    dat2 = torch.cat((1 - x, y), dim=2)
+    dat3 = torch.cat((x, 1 - y), dim=2)
+    dat4 = torch.cat((1 - x, 1 - y), dim=2)
     dat5 = torch.cat((y, x), dim=2)
-    dat6 = torch.cat((1-y, x), dim=2)
-    dat7 = torch.cat((y, 1-x), dim=2)
-    dat8 = torch.cat((1-y, 1-x), dim=2)
+    dat6 = torch.cat((1 - y, x), dim=2)
+    dat7 = torch.cat((y, 1 - x), dim=2)
+    dat8 = torch.cat((1 - y, 1 - x), dim=2)
 
     data_augmented = torch.cat((dat1, dat2, dat3, dat4, dat5, dat6, dat7, dat8), dim=0)
     # shape = (8*batch, problem, 2)
 
     return data_augmented
 
+
 class Transformation:
     """
     Transformation base class
     """
+
     def __init__(self, probability=0.5) -> None:
         self.invariant = None
         # probably built in random transformation sampling
@@ -78,23 +86,27 @@ class Transformation:
     def __call__(self, problem):
         raise NotImplementedError
 
+
 class PomoTransformation(Transformation):
     pass
 
-# should be implemented as stack of multiple transformation classes with call function and 
+
+# should be implemented as stack of multiple transformation classes with call function and
 class TSPEucTransformer:
-    
     def __init__(self) -> None:
         pass
 
     def load_TSP_from_nx(self, g):
-        return np.array([g.nodes[k]['coord'] for k in g.nodes()])
+        return np.array([g.nodes[k]["coord"] for k in g.nodes()])
 
     def save_TSP_as_nx(self, problem):
-        edges = [(s[0],t[0],np.linalg.norm(s[1]-t[1])) for s,t in combinations(enumerate(problem),2)]
+        edges = [
+            (s[0], t[0], np.linalg.norm(s[1] - t[1]))
+            for s, t in combinations(enumerate(problem), 2)
+        ]
         g = nx.Graph()
         g.add_weighted_edges_from(edges)
-        feature_dict = {k: {'coord': problem[k]} for k in range(problem.shape[0])} 
+        feature_dict = {k: {"coord": problem[k]} for k in range(problem.shape[0])}
         nx.set_node_attributes(g, feature_dict)
         return g
 
@@ -106,12 +118,12 @@ class TSPEucTransformer:
         return self.translate_TSP(problem)
 
     def flip_TSP_coordinates(self, problem):
-        return problem[:,::-1]
+        return problem[:, ::-1]
 
     def pomo_transform(self, problem, variant=0):
         assert problem.shape[1] == 2
-        x = problem[:,0:1]
-        y = problem[:,1::]
+        x = problem[:, 0:1]
+        y = problem[:, 1::]
         if variant == 0:
             return np.concatenate((x, y), -1)
         elif variant == 1:
@@ -128,7 +140,7 @@ class TSPEucTransformer:
             return np.concatenate((y, 1 - x), -1)
         elif variant == 7:
             return np.concatenate((1 - y, 1 - x), -1)
-    
+
     def reflect_TSP(self, problem, axis=0):
         # apply reflection matrix
         pass
@@ -140,7 +152,7 @@ class TSPEucTransformer:
         problem = self.center_TSP(problem, refit)
         temp = np.concatenate((problem, np.zeros((problem.shape[0], 1))), -1)
         temp = rotate_3D(temp, degree=180)
-        problem = temp[:,0:dimension]
+        problem = temp[:, 0:dimension]
         if refit:
             problem = self.fit_TSP_into_square(problem)
         return problem
@@ -149,7 +161,7 @@ class TSPEucTransformer:
         if flip_axis == 0:
             pass
         elif flip_axis == 1:
-            problem =  self.flip_TSP_simple(problem)
+            problem = self.flip_TSP_simple(problem)
         elif flip_axis == 2:
             problem = self.rotate_TSP(problem, degree=90, refit=refit)
             problem = self.flip_TSP_simple(problem)
@@ -163,12 +175,12 @@ class TSPEucTransformer:
             problem = self.flip_TSP_simple(problem)
             problem = self.rotate_TSP(problem, degree=45, refit=refit)
         return problem
-    
+
     def apply_PCA_to_TSP(self, problem, variant=1):
         dimension = problem.shape[1]
         if variant == 0:
             return problem
-        pca = PCA(n_components=dimension) # center & rotate coordinates
+        pca = PCA(n_components=dimension)  # center & rotate coordinates
         problem = pca.fit_transform(problem)
         return self.fit_TSP_into_square(problem)
 
@@ -182,13 +194,13 @@ class TSPEucTransformer:
         if refit:
             return self.fit_TSP_into_square(problem)
         else:
-            return self.translate_TSP(problem, shift=(0.5,0.5))
+            return self.translate_TSP(problem, shift=(0.5, 0.5))
 
-    def translate_TSP(self, problem, shift=(0.5,0.5)):
+    def translate_TSP(self, problem, shift=(0.5, 0.5)):
         dimension = problem.shape[1]
         assert dimension == 2
-        x = problem[:,0:1]
-        y = problem[:,1::]
+        x = problem[:, 0:1]
+        y = problem[:, 1::]
         return np.concatenate((x - shift[0], y - shift[1]), -1)
 
     def fit_TSP_into_square(self, problem):
@@ -196,15 +208,15 @@ class TSPEucTransformer:
         maxima = []
         minima = []
         for k in range(dimension):
-            maxima.append(np.max(problem[:,k]))
-            minima.append(np.min(problem[:,k]))
+            maxima.append(np.max(problem[:, k]))
+            minima.append(np.min(problem[:, k]))
 
         differences = [maxima[k] - minima[k] for k in range(dimension)]
 
         scaler = 1 / np.max(differences)
 
         for k in range(dimension):
-            problem[:,k] = scaler * (problem[:,k] - minima[k])
+            problem[:, k] = scaler * (problem[:, k] - minima[k])
         return problem
 
     def center_TSP(self, problem, refit=False):
@@ -237,18 +249,40 @@ class TSPEucTransformer:
         return problem
 
 
+class RandomRotation:
+    pass
+
+
+class RandomScale:
+    pass
+
+
+class Center:
+    pass
+
+
 # potentially later implement each transform in a seperate class with default / invariant value etc
 class RandomTSPEucTransformation(TSPEucTransformer):
     """
     Realizes random scaling, reflection, rotation, translation, mirroring
     """
-    def __init__(self, pomo=True, flipping=True, scaling=True, rotation=True, translation=True, pca=False,  pomo_first=False) -> None:
+
+    def __init__(
+        self,
+        pomo=True,
+        flipping=True,
+        scaling=True,
+        rotation=True,
+        translation=True,
+        pca=False,
+        pomo_first=False,
+    ) -> None:
         super().__init__()
         self.applied_transfos = []
         # if true then the first seven transformations are all pomo transformations
         self.pomo_first = pomo_first
         if pomo:
-            self.pomo_variants = np.arange(1,8)
+            self.pomo_variants = np.arange(1, 8)
         else:
             self.pomo_variants = [0]
         if flipping:
@@ -256,7 +290,7 @@ class RandomTSPEucTransformation(TSPEucTransformer):
         else:
             self.flip_axis = [0]
         if rotation:
-            self.degrees = np.linspace(15, 345, 11) # 30 degrees
+            self.degrees = np.linspace(15, 345, 11)  # 30 degrees
         else:
             self.degrees = [0.0]
         if scaling:
@@ -264,7 +298,9 @@ class RandomTSPEucTransformation(TSPEucTransformer):
         else:
             self.scalers = [1.0]
         if translation:
-            self.translation_vectors = list(product(np.linspace(-0.1, 0.1, 3), np.linspace(-0.1, 0.1, 3)))
+            self.translation_vectors = list(
+                product(np.linspace(-0.1, 0.1, 3), np.linspace(-0.1, 0.1, 3))
+            )
         else:
             self.translation_vectors = [(0.0, 0.0)]
         if pca:
@@ -272,14 +308,14 @@ class RandomTSPEucTransformation(TSPEucTransformer):
         else:
             self.pca = [0]
         # self.possible_transfos = product(self.pomo_variants, self.flip_axis, self.degrees, self.scalers)
-    
+
     def reset(self):
         self.applied_transfos = []
 
     @property
     def num_applied_transfos(self):
         return len(self.applied_transfos)
-    
+
     def check_if_transfo_available(self, transfo):
         # maybe check if transfo is just similar (ignoring the scaling)
         if transfo in self.applied_transfos:
@@ -287,7 +323,7 @@ class RandomTSPEucTransformation(TSPEucTransformer):
         else:
             return True
 
-    def nested_transform(self, problem, transfo_id):
+    def sequential_transform(self, problem, transfo_id):
         problem = self.pomo_transform(problem, variant=transfo_id[0])
         problem = self.flip_TSP(problem, transfo_id[1])
         problem = self.rotate_TSP(problem, transfo_id[2], refit=True)
@@ -314,30 +350,66 @@ class RandomTSPEucTransformation(TSPEucTransformer):
     def __call__(self, problem):
         if self.pomo_first and self.num_applied_transfos < 7:
             pomo_variant = self.num_applied_transfos + 1
-            transfo_id = [pomo_variant] + [0, 0.0, 1.0, 0] # invariant values for each transform
+            transfo_id = [pomo_variant] + [
+                0,
+                0.0,
+                1.0,
+                0,
+            ]  # invariant values for each transform
         else:
             transfo_id = self.sample_random_transfo()
         # apply transfo
-        transformed_problem = self.nested_transform(problem, transfo_id)
+        transformed_problem = self.sequential_transform(problem, transfo_id)
         # add transfo to memory
         self.applied_transfos.append(transfo_id)
         return transformed_problem
 
 
-
 def rotate_3D(vectors, degree):
     assert vectors.shape[-1] == 3
     radians = (degree / 360) * 2 * math.pi
-    rotmatrix = np.array([[1, 0, 0],
-                          [0, math.cos(radians), -math.sin(radians)],
-                          [0, math.sin(radians), math.cos(radians)]])
+    rotmatrix = np.array(
+        [
+            [1, 0, 0],
+            [0, math.cos(radians), -math.sin(radians)],
+            [0, math.sin(radians), math.cos(radians)],
+        ]
+    )
 
     return vectors @ rotmatrix
+
 
 def rotate_2D(vectors, degree):
     assert vectors.shape[-1] == 2
     radians = (degree / 360) * 2 * math.pi
-    rotmatrix = np.array([[math.cos(radians),-math.sin(radians)],
-                          [math.sin(radians),math.cos(radians)]])
+    rotmatrix = np.array(
+        [
+            [math.cos(radians), -math.sin(radians)],
+            [math.sin(radians), math.cos(radians)],
+        ]
+    )
     return vectors @ rotmatrix
-    
+
+
+class BaseTransform:
+    def __call__(self, problem):
+        raise NotImplementedError
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}()"
+
+
+class RandomFlip(BaseTransform):
+    def __init__(self, axis, p=0.5):
+        self.axis = axis
+        self.p = p
+
+    def __call__(self, data):
+        if random.random() < self.p:
+            pos = data.pos.clone()
+            pos[..., self.axis] = -pos[..., self.axis]
+            data.pos = pos
+        return data
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(axis={self.axis}, p={self.p})"

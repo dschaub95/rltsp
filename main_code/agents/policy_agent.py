@@ -1,6 +1,7 @@
 from main_code.agents.base_agent import BaseAgent
 from main_code.nets.pomo import PomoNetwork
 
+
 class PolicyAgent(BaseAgent):
     def __init__(self, policy_net) -> None:
         super().__init__(policy_net)

@@ -5,7 +5,12 @@ import numpy as np
 import torch
 from main_code.utils.torch_objects import FloatTensor, device
 from main_code.agents.base_agent import BaseAgent
-from main_code.environment.environment_new import GroupEnvironment, GroupState, MultiGroupState
+from main_code.environment.environment_new import (
+    GroupEnvironment,
+    GroupState,
+    MultiGroupState,
+)
+
 
 class TreeNode:
     def __init__(self, state, parent, prior_p, q_init=5, orig_prob=1.0, epsilon=0.5):
@@ -46,18 +51,22 @@ class TreeNode:
             # probs = (1 - self.epsilon) * probs_0 + self.epsilon * np.random.dirichlet([1 for i in range(probs_0.shape[0])])
             pass
         for i, prob in enumerate(probs):
-            action = actions[:,:,i]
+            action = actions[:, :, i]
             # state = states[i]
             if action not in self._children:
-                self._children[action] = TreeNode(None, self, prob, self.q_init, orig_prob=probs_0[i])
+                self._children[action] = TreeNode(
+                    None, self, prob, self.q_init, orig_prob=probs_0[i]
+                )
 
     def select(self, c_puct):
         # select the best child
         rollout_values = [node._Q for node in self._children.values()]
         # print(rollout_values)
         mean_Q = np.mean(rollout_values)
-        best_child = max(self._children.items(),
-                         key=lambda item: item[1].get_value(c_puct, self.max_Q, self.min_Q, mean_Q))
+        best_child = max(
+            self._children.items(),
+            key=lambda item: item[1].get_value(c_puct, self.max_Q, self.min_Q, mean_Q),
+        )
         return best_child
 
     def add_visits(self, visits):
@@ -100,10 +109,12 @@ class TreeNode:
         # compute value for selection, higher is better
         # self._u = (c_puct * self._P * math.sqrt(self._parent._n_visits + 1) / (1 + self._n_visits))
         # alpha zero variant of puct
-        self._u = c_puct * self._P * math.sqrt(self._parent._n_visits) / (1 + self._n_visits)
+        self._u = (
+            c_puct * self._P * math.sqrt(self._parent._n_visits) / (1 + self._n_visits)
+        )
         if max_value - min_value == 0:
             # q = self._Q
-            # assign zero if the parent node (and potentially sub nodes) have been explored, 
+            # assign zero if the parent node (and potentially sub nodes) have been explored,
             # but giving a return not worse or better than the leaf calculated after first selection
             q = 0
         else:
@@ -115,7 +126,7 @@ class TreeNode:
         value = q + self._u
         # print(value)
         return value
-    
+
     def is_leaf(self):
         return self._children == {}
 
@@ -132,7 +143,9 @@ class TreeNode:
 
 
 class MCTS:
-    def __init__(self, net, c_puct=5, n_playout=400, n_parallel=2, virtual_loss=20, q_init=-5):
+    def __init__(
+        self, net, c_puct=5, n_playout=400, n_parallel=2, virtual_loss=20, q_init=-5
+    ):
         self._net = net
         self._c_puct = c_puct
         self._n_playout = n_playout
@@ -153,7 +166,11 @@ class MCTS:
         # prepare network once for parallelized leaf prediction
         num_nodes = self._net.encoded_nodes.size(-2)
         embed_dim = self._net.encoded_nodes.size(-1)
-        encoded_nodes = self._net.encoded_nodes[None,:,:,:].expand(n_parallel, -1, -1, -1).reshape(-1, num_nodes, embed_dim)
+        encoded_nodes = (
+            self._net.encoded_nodes[None, :, :, :]
+            .expand(n_parallel, -1, -1, -1)
+            .reshape(-1, num_nodes, embed_dim)
+        )
         self._net.soft_reset(encoded_nodes)
 
     def select_leaf(self):
@@ -208,11 +225,11 @@ class MCTS:
             # priors = self._eval([leaf.state for leaf in leaves])
             # Calc priors and values together
             values, priors = self.evaluate_leaves(leaves)
-            # set the qinit and value after the first evaluation of the root node 
+            # set the qinit and value after the first evaluation of the root node
             # based on the value following the rollout policy
             # min and max values are important for the selection process of child nodes
             if self.step == 0 and self.cur_playout == 0:
-                root_value = float(values[0].max(dim=-1)[0].max(dim=-1)[0]) 
+                root_value = float(values[0].max(dim=-1)[0].max(dim=-1)[0])
                 self.q_init = 1.1 * root_value
                 self._root.q_init = self.q_init
                 self._root._Q = root_value
@@ -230,11 +247,13 @@ class MCTS:
                 # shape (batch_s, group_s, num_ava_actions)
                 prior = torch.gather(ps, dim=-1, index=available_actions)
                 prior, indices = torch.sort(prior, dim=-1, descending=True)
-                available_actions = torch.gather(available_actions, dim=-1, index=indices)
+                available_actions = torch.gather(
+                    available_actions, dim=-1, index=indices
+                )
                 # compute all possible states based on the available actions
                 # next_states = [self.env.next_state(leaf.state, available_actions[:,:,i]) for i in range(num_ava_actions)]
                 # expand all the leaves (each leave will be fully expanded)
-                leaf.expand(available_actions, prior)#, next_states)
+                leaf.expand(available_actions, prior)  # , next_states)
                 # delete state
                 if leaf is not self._root:
                     del leaf.state
@@ -247,7 +266,9 @@ class MCTS:
         self.prepare_net(len(leaves))
         values, priors = self._value_func(multi_state)
         # restore net encoded nodes
-        self._net.encoded_nodes = self._net.encoded_nodes[0:multi_state.single_batch_s,:,:]
+        self._net.encoded_nodes = self._net.encoded_nodes[
+            0 : multi_state.single_batch_s, :, :
+        ]
         return values, priors
         # return self.value_func(leaves)
         # result = []
@@ -278,10 +299,12 @@ class MCTS:
             for idx, sequence in enumerate(sequences):
                 state, score = sequences[idx]
                 priors = self._eval([state])[0]
-                priors = priors[list(state['ava_action'])]
+                priors = priors[list(state["ava_action"])]
 
-                for p, action in zip(priors, state['ava_action']):
-                    all_candidates.append([self.env.next_state(state, action), score - math.log(p + 1e-8)])
+                for p, action in zip(priors, state["ava_action"]):
+                    all_candidates.append(
+                        [self.env.next_state(state, action), score - math.log(p + 1e-8)]
+                    )
 
             sequences = []
             ordered = sorted(all_candidates, key=lambda tup: tup[1])
@@ -306,7 +329,10 @@ class MCTS:
         # split probability tensor into list for each leaf
         orig_size = multi_state.single_batch_s
         num_states = multi_state.num_single_states
-        priors = [first_prob_tensor[i*orig_size:(i+1)*orig_size,:,:] for i in range(num_states)]
+        priors = [
+            first_prob_tensor[i * orig_size : (i + 1) * orig_size, :, :]
+            for i in range(num_states)
+        ]
         return values, priors
 
     # def value_func(self, leaves):
@@ -353,11 +379,14 @@ class MCTS:
         current_simulations = self._root._n_visits
         self.cur_playout = 0
         # while self._root._n_visits < self._n_playout + current_simulations:
-            # print(f"Starting playout number {self.cur_playout}")
+        # print(f"Starting playout number {self.cur_playout}")
         while self.cur_playout < self._n_playout:
             self._playout(self.n_parallel)
             self.cur_playout += 1
-        act_values_states = [(act, node._Q, node.state, node._P) for act, node in self._root._children.items()]
+        act_values_states = [
+            (act, node._Q, node.state, node._P)
+            for act, node in self._root._children.items()
+        ]
         return zip(*act_values_states)
 
     def update_with_move(self, last_move):
@@ -374,10 +403,20 @@ class MCTS:
 
 
 class MCTSAgent(BaseAgent):
-    def __init__(self, policy_net, c_puct=1.3, n_playout=10, n_parallel=1, virtual_loss=0, q_init=-5) -> None:
+    def __init__(
+        self,
+        policy_net,
+        c_puct=1.3,
+        n_playout=10,
+        n_parallel=1,
+        virtual_loss=0,
+        q_init=-5,
+    ) -> None:
         super().__init__(policy_net)
-        self.mcts = MCTS(policy_net, c_puct, n_playout, n_parallel, virtual_loss, q_init)
-    
+        self.mcts = MCTS(
+            policy_net, c_puct, n_playout, n_parallel, virtual_loss, q_init
+        )
+
     def reset(self, state: GroupState):
         # set different q_init for different tsp size
         # if state.tsp_size == 20:
@@ -385,7 +424,7 @@ class MCTSAgent(BaseAgent):
         # elif state.tsp_size == 50:
         #     self.mcts.q_init = -7
         # elif state.tsp_size == 100:
-        #     self.mcts.q_init = -10 
+        #     self.mcts.q_init = -10
         # init new environment model based on state
         # handle data batch sequentially for now
         env = GroupEnvironment(state.data, state.tsp_size)
@@ -393,7 +432,7 @@ class MCTSAgent(BaseAgent):
         state = self.mcts.initialize_search(env, group_size=state.group_s)
         # reset the network and encode nodes once for this state
         super().reset(state)
-    
+
     def get_action(self, state):
         # print(self.mcts._net.encoded_nodes)
         acts, values, states, priors = self.mcts.get_move_values()
@@ -415,7 +454,15 @@ class MCTSAgent(BaseAgent):
 
 
 class MCTSBatchAgent(BaseAgent):
-    def __init__(self, policy_net, c_puct=1.3, n_playout=10, n_parallel=1, virtual_loss=0, q_init=-5) -> None:
+    def __init__(
+        self,
+        policy_net,
+        c_puct=1.3,
+        n_playout=10,
+        n_parallel=1,
+        virtual_loss=0,
+        q_init=-5,
+    ) -> None:
         super().__init__(policy_net)
         self.policy_net = policy_net
         self.c_puct = c_puct
@@ -423,7 +470,7 @@ class MCTSBatchAgent(BaseAgent):
         self.n_parallel = n_parallel
         self.virtual_loss = virtual_loss
         self.q_init = q_init
-    
+
     def reset(self, state: GroupState):
         # set different q_init for different tsp size
         if state.tsp_size == 20:
@@ -431,17 +478,29 @@ class MCTSBatchAgent(BaseAgent):
         elif state.tsp_size == 50:
             self.q_init = -7
         elif state.tsp_size == 100:
-            self.q_init = -10        
+            self.q_init = -10
         # make batch calculation for the encoded nodes
         self.model.reset(state)
-        self.encoded_nodes_list = [encoded_nodes.unsqueeze(0) for encoded_nodes in self.model.encoded_nodes]
+        self.encoded_nodes_list = [
+            encoded_nodes.unsqueeze(0) for encoded_nodes in self.model.encoded_nodes
+        ]
         states = state.split_along_batch_dim()
         env_list = [GroupEnvironment(state.data, state.tsp_size) for state in states]
-        self.mcts_list = [MCTS(self.policy_net, self.c_puct, self.n_playout, self.n_parallel, self.virtual_loss, self.q_init) for env in env_list]
+        self.mcts_list = [
+            MCTS(
+                self.policy_net,
+                self.c_puct,
+                self.n_playout,
+                self.n_parallel,
+                self.virtual_loss,
+                self.q_init,
+            )
+            for env in env_list
+        ]
         # init mcts
-        for i, mcts in enumerate(self.mcts_list): 
+        for i, mcts in enumerate(self.mcts_list):
             mcts.initialize_search(env_list[i], group_size=state.group_s)
-    
+
     def get_action(self, state):
         # iterate over mc tree for each sample in the batch
         batch_action = []

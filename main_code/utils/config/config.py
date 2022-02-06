@@ -27,14 +27,12 @@ class Settings(dict):
 
 
 def get_default_config():
-    """Returns default config object.
-    """
+    """Returns default config object."""
     return Settings(json.load(open("./configs/default.json")))
 
 
 def get_config(filepath=None):
-    """Returns config from json file.
-    """
+    """Returns config from json file."""
     config = get_default_config()
     if filepath is not None:
         config.update(Settings(json.load(open(filepath))))
@@ -49,13 +47,16 @@ import yaml
 # base config class
 # import all the modules which shall be represented in
 
+
 class Config:
-    def __init__(self,
-                 config_dict=None,
-                 config_class=None,
-                 config_yaml=None,
-                 config_json=None,
-                 restrictive=True) -> None:
+    def __init__(
+        self,
+        config_dict=None,
+        config_class=None,
+        config_yaml=None,
+        config_json=None,
+        restrictive=True,
+    ) -> None:
 
         # set default values as specified inside the config class
         self._defaults()
@@ -76,13 +77,13 @@ class Config:
     def _set_defaults(self, _class, restrictive=False):
         # retrieve defaults form another class
         full_args_spec = inspect.getfullargspec(_class.__init__)
-        args = [arg for arg  in full_args_spec.args if not arg == 'self']
+        args = [arg for arg in full_args_spec.args if not arg == "self"]
         defaults = full_args_spec.defaults
         if defaults is None:
             pass
         else:
             defaults = list(defaults)
-            args = args[::-1][:len(defaults)][::-1]
+            args = args[::-1][: len(defaults)][::-1]
             defaults_dict = dict(zip(args, defaults))
             self.from_dict(defaults_dict, restrictive=restrictive)
 
@@ -108,12 +109,12 @@ class Config:
 
     def from_yaml(self, config_yaml, restrictive=True):
         # read via pyaml
-        with open(config_yaml, 'r') as f:
+        with open(config_yaml, "r") as f:
             self.from_dict(yaml.safe_load(f), restrictive)
 
     def from_json(self, config_json, restrictive=True):
         # read via json
-        with open(config_json, 'r') as f:
+        with open(config_json, "r") as f:
             self.from_dict(json.load(f), restrictive)
 
     def to_dict(self, nested=True):
@@ -132,10 +133,10 @@ class Config:
             return self.__dict__
 
     def to_df(self, nested=True):
-        return pd.DataFrame.from_dict(self.to_dict(nested), orient='index').transpose()
+        return pd.DataFrame.from_dict(self.to_dict(nested), orient="index").transpose()
 
     def to_yaml(self, file_name, nested=True):
-        with open(file_name, 'w') as outfile:
+        with open(file_name, "w") as outfile:
             yaml.dump(self.to_dict(nested=nested), outfile, default_flow_style=False)
 
     def _flatten_dict(self, nested_dict):
@@ -145,8 +146,8 @@ class Config:
                 # if sub dict is nested again flatten it
                 flat_sub_dict = self._flatten_dict(nested_dict[key])
                 for sub_key in flat_sub_dict:
-                    key_phrase = '_'.join(key.split('_')[0:-1])
-                    new_key = f'{key_phrase}.{sub_key}'
+                    key_phrase = "_".join(key.split("_")[0:-1])
+                    new_key = f"{key_phrase}.{sub_key}"
                     flattend_dict[new_key] = flat_sub_dict[sub_key]
             else:
                 flattend_dict[key] = nested_dict[key]
