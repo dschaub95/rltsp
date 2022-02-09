@@ -86,6 +86,7 @@ if __name__ == "__main__":
     logger, result_folder_path = get_test_logger(test_config)
     # save config to log folder
     config.to_yaml(f"{result_folder_path}/config.yml", nested=True)
+    wandb.init(config=test_config)
 
     # Load Model
     actor_group = PomoNetwork(config).to(device)

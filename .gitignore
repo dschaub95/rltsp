@@ -1,5 +1,6 @@
 logs/test/*
 logs/train/*
+wandb/**
 !logs/.gitkeep
 !logs/train/Saved_TSP100_Model/
 results/**

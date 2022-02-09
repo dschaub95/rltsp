@@ -1,6 +1,7 @@
 import numpy as np
 import time
 import torch
+import wandb
 import pandas as pd
 import json
 from main_code.utils.torch_objects import device, Tensor, LongTensor
@@ -172,6 +173,7 @@ class TSPTester:
                 log_str = f"Ep:{episode_str} ({percent:5}%)  T:{timestr}  avg.dist:{avg_length}  avg.error:{avg_error}%"
                 self.logger.info(log_str)
                 logger_start = time.time()
+            wandb.log({"avg_error": self.result.avg_approx_error})
         # add some more infos to the result object
         self.result.computation_time = timestr
         return self.result
