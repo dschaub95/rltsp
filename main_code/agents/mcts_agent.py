@@ -13,7 +13,9 @@ from main_code.environment.environment_new import (
 
 
 class TreeNode:
-    def __init__(self, state, parent, prior_p, q_init=5, orig_prob=1.0, epsilon=0.91):
+    def __init__(
+        self, state, parent, prior_p, q_init=None, orig_prob=1.0, epsilon=0.91
+    ):
         self.state = state
         self._parent = parent
         self._children = {}
@@ -34,6 +36,7 @@ class TreeNode:
         # different value variants
         self.node_value_term = ""
         self.prob_term = "puct"
+        self.scale = [0, 1]
         # only add for debugging
         self.orig_prob = orig_prob
         # add depth to a node for debugging
@@ -85,7 +88,7 @@ class TreeNode:
         best_child = max(
             self._children.items(),
             key=lambda item: item[1].get_value(
-                c_puct, self.max_Q, self.min_Q, child_Qs
+                c_puct, self.max_Q, self.min_Q, child_Qs, self.q_init
             ),
         )
         return best_child
@@ -98,6 +101,8 @@ class TreeNode:
     def update(self, leaf_value):
         # if the leaf was selected for the first time always use its value to overwrite any bad init value
         if self._n_visits == 1:
+            # always keep initial q value as base line for evaluation of the leaf nodes
+            # self.q_init = leaf_value
             self._Q = leaf_value
             self.max_Q = leaf_value
             self.min_Q = leaf_value
@@ -114,7 +119,7 @@ class TreeNode:
         leaf_value = float(leaf_value.max(dim=-1)[0].max(dim=-1)[0])
         self.update(leaf_value)
 
-    def get_value(self, c_puct, parent_max_Q, parent_min_Q, neighbor_Qs):
+    def get_value(self, c_puct, parent_max_Q, parent_min_Q, neighbor_Qs, parent_init_Q):
         # compute value for selection, higher is better
         # check for different variants of prob term
         # alpha zero variant of puct
@@ -124,30 +129,52 @@ class TreeNode:
         # orig formula
         # self._u = (c_puct * self._P * math.sqrt(self._parent._n_visits + 1) / (1 + self._n_visits))
 
-        node_value = self._calc_node_value(parent_max_Q, parent_min_Q, neighbor_Qs)
+        node_value = self._calc_node_value(
+            parent_max_Q, parent_min_Q, neighbor_Qs, parent_init_Q
+        )
         value = node_value + self._u
         # print(value)
         return value
 
-    def _calc_node_value(self, parent_max_Q, parent_min_Q, neighbor_Qs):
+    def _rescale(self, value, cur_scale=[0, 1]):
+        # assumes value is scaled to [0,1]
+        value = (value - cur_scale[0]) / (cur_scale[1] - cur_scale[0])
+        value = value * (self.scale[1] - self.scale[0])
+        value = value + self.scale[0]
+        return value
+
+    def _calc_node_value(self, parent_max_Q, parent_min_Q, neighbor_Qs, parent_init_Q):
         # calculates just the node value --> includes different variants
         max_Q = self.max_Q
         min_Q = self.min_Q
+        # remove None values
+        neighbor_Qs = [q for q in neighbor_Qs if q is not None]
         mean_Q = np.mean(neighbor_Qs)
         # should be one if not yet approximated
-        # if self._n_visits == 0:
-        #     return 1
-        # check for different variants
-        if parent_max_Q - parent_min_Q == 0:
-            # q = self._Q
-            # assign zero if the parent node (and potentially sub nodes) have been explored,
-            # but giving a return not worse or better than the leaf calculated after first selection
-            q = 0
+        if self.node_value_term == "test_1":
+            if self._n_visits == 0:
+                return self.scale[1]
+            scaler = max(parent_max_Q - parent_init_Q, parent_init_Q - parent_min_Q)
+            if scaler == 0:
+                # here the current node must have been visited once but yielded the same return as the parent node
+                return self.scale[1] - (self.scale[1] - self.scale[0]) / 2
+            q = (self._Q - parent_init_Q) / scaler
+            q = self._rescale(q, cur_scale=[-1, 1])
         else:
-            # q = -(self._Q - mean_value) / (max_value - min_value)
-            # q = np.clip((self._Q - mean_value) / (max_value - min_value), 0, 1)
-            q = (self._Q - mean_Q) / (parent_max_Q - parent_min_Q)
-            # q = 1 - (max_value - self._Q) / (max_value - min_value) # in [0,1]
+            # default case
+            # if self._n_visits == 0:
+            #     return 1
+            # check for different variants
+            if parent_max_Q - parent_min_Q == 0:
+                # q = self._Q
+                # assign zero if the parent node (and potentially sub nodes) have been explored,
+                # but giving a return not worse or better than the leaf calculated after first selection
+                q = 0
+            else:
+                # q = -(self._Q - mean_value) / (max_value - min_value)
+                # q = np.clip((self._Q - mean_value) / (max_value - min_value), 0, 1)
+                q = (self._Q - mean_Q) / (parent_max_Q - parent_min_Q)
+                # q = 1 - (max_value - self._Q) / (max_value - min_value) # in [0,1]
         return q
 
     def add_virtual_loss(self, virtual_loss):
@@ -396,12 +423,9 @@ class MCTSAgent(BaseAgent):
         n_playout=10,
         n_parallel=1,
         virtual_loss=0,
-        q_init=-5,
     ) -> None:
         super().__init__(policy_net)
-        self.mcts = MCTS(
-            policy_net, c_puct, n_playout, n_parallel, virtual_loss, q_init
-        )
+        self.mcts = MCTS(policy_net, c_puct, n_playout, n_parallel, virtual_loss)
 
     def reset(self, state: GroupState):
         # set different q_init for different tsp size
