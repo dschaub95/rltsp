@@ -13,9 +13,7 @@ from main_code.environment.environment_new import (
 
 
 class TreeNode:
-    def __init__(
-        self, state, parent, prior_p, q_init=None, orig_prob=1.0, epsilon=0.91
-    ):
+    def __init__(self, state, parent, prior_p, q_init=None, orig_prob=1.0):
         self.state = state
         self._parent = parent
         self._children = {}
@@ -30,13 +28,10 @@ class TreeNode:
         self.n_vlosses = 0
 
         self.prob_transfo = None
-        # exploration constant
-        self.epsilon = epsilon
-        self.selection_strategy = None
         # different value variants
-        self.node_value_term = ""
-        self.prob_term = "puct"
-        self.scale = [0, 1]
+        self.node_value_term = "default"
+        self.prob_term = "puct"  # "pucb"
+        self.node_value_scale = [-1, 1]
         # only add for debugging
         self.orig_prob = orig_prob
         # add depth to a node for debugging
@@ -45,7 +40,7 @@ class TreeNode:
         else:
             self.depth = parent.depth + 1
 
-    def _transform_policy(self, probs):
+    def _transform_policy(self, probs, epsilon):
         # use softmax approach
         # probs = 1.0 * probs_0 + self.epsilon
         # probs = np.exp(probs) / np.sum(np.exp(probs))
@@ -53,10 +48,10 @@ class TreeNode:
         # probs = (1 - self.epsilon) * probs_0 + self.epsilon * np.random.dirichlet([1 for i in range(probs_0.shape[0])])
         # use bayesian mixing with the uniform policy for some epsilon > 0
         uniform_probs = np.ones(probs.shape) * 1 / probs.shape[0]
-        probs = (1 - self.epsilon) * probs + self.epsilon * uniform_probs
+        probs = (1 - epsilon) * probs + epsilon * uniform_probs
         return probs
 
-    def expand(self, actions, priors):
+    def expand(self, actions, priors, epsilon):
         # fully expands a leaf considering all possible actions in this state
         # modify probabilitiy vector to favor exploration here
         probs_0 = priors.mean(dim=1).mean(dim=0).detach().cpu().numpy()
@@ -64,7 +59,7 @@ class TreeNode:
         # probs_0 = priors.max(dim=1)[0].max(dim=0)[0].detach().cpu().numpy()
         # add exploration noise or rather smooth the probabilities
         if self.depth >= 0:
-            probs = self._transform_policy(probs_0)
+            probs = self._transform_policy(probs_0, epsilon)
         # only expand kth most promising children
         k = probs.shape[0]
         for i, prob in enumerate(probs[0:k]):
@@ -72,24 +67,18 @@ class TreeNode:
             # state = states[i]
             if action not in self._children:
                 self._children[action] = TreeNode(
-                    None,
-                    self,
-                    prob,
-                    self.q_init,
-                    orig_prob=probs_0[i],
-                    epsilon=self.epsilon,
+                    None, self, prob, self.q_init, orig_prob=probs_0[i]
                 )
 
     def select(self, c_puct):
         # give all value to the value calculation --> selection function should not change, just the formula
         child_Qs = [node._Q for node in self._children.values()]
+        # child_Qs = [q for q in child_Qs if q is not None]
         # test epsilon greedy action selection
         # select the best child
         best_child = max(
             self._children.items(),
-            key=lambda item: item[1].get_value(
-                c_puct, self.max_Q, self.min_Q, child_Qs, self.q_init
-            ),
+            key=lambda item: item[1].get_value(c_puct, child_Qs),
         )
         return best_child
 
@@ -99,10 +88,10 @@ class TreeNode:
         self._n_visits += visits
 
     def update(self, leaf_value):
-        # if the leaf was selected for the first time always use its value to overwrite any bad init value
-        if self._n_visits == 1:
+        # if the leaf was selected for the first time or is terminal always use its value to overwrite any bad init value
+        if self._n_visits <= 1:
             # always keep initial q value as base line for evaluation of the leaf nodes
-            # self.q_init = leaf_value
+            self.q_init = leaf_value
             self._Q = leaf_value
             self.max_Q = leaf_value
             self.min_Q = leaf_value
@@ -119,51 +108,61 @@ class TreeNode:
         leaf_value = float(leaf_value.max(dim=-1)[0].max(dim=-1)[0])
         self.update(leaf_value)
 
-    def get_value(self, c_puct, parent_max_Q, parent_min_Q, neighbor_Qs, parent_init_Q):
+    def get_value(self, c_puct, neighbor_Qs):
         # compute value for selection, higher is better
         # check for different variants of prob term
         # alpha zero variant of puct
-        self._u = (
-            c_puct * self._P * math.sqrt(self._parent._n_visits) / (1 + self._n_visits)
-        )
+        self._u = self._calc_prob_term(c_puct)
         # orig formula
         # self._u = (c_puct * self._P * math.sqrt(self._parent._n_visits + 1) / (1 + self._n_visits))
 
-        node_value = self._calc_node_value(
-            parent_max_Q, parent_min_Q, neighbor_Qs, parent_init_Q
-        )
+        node_value = self._calc_node_value(neighbor_Qs)
         value = node_value + self._u
         # print(value)
         return value
 
+    def _calc_prob_term(self, c_puct):
+        if self.prob_term == "puct":
+            return (
+                c_puct
+                * self._P
+                * math.sqrt(self._parent._n_visits)
+                / (1 + self._n_visits)
+            )
+        elif self.prob_term == "pucb":
+            # two terms
+            return 0
+
     def _rescale(self, value, cur_scale=[0, 1]):
+        scale = self.node_value_scale
         # assumes value is scaled to [0,1]
         value = (value - cur_scale[0]) / (cur_scale[1] - cur_scale[0])
-        value = value * (self.scale[1] - self.scale[0])
-        value = value + self.scale[0]
+        value = value * (scale[1] - scale[0]) + scale[0]
         return value
 
-    def _calc_node_value(self, parent_max_Q, parent_min_Q, neighbor_Qs, parent_init_Q):
+    def _calc_node_value(self, neighbor_Qs):
         # calculates just the node value --> includes different variants
         max_Q = self.max_Q
         min_Q = self.min_Q
-        # remove None values
-        neighbor_Qs = [q for q in neighbor_Qs if q is not None]
+        parent_max_Q = self._parent.max_Q
+        parent_min_Q = self._parent.min_Q
+        parent_init_Q = self._parent.q_init
         mean_Q = np.mean(neighbor_Qs)
         # should be one if not yet approximated
         if self.node_value_term == "test_1":
-            if self._n_visits == 0:
-                return self.scale[1]
             scaler = max(parent_max_Q - parent_init_Q, parent_init_Q - parent_min_Q)
-            if scaler == 0:
-                # here the current node must have been visited once but yielded the same return as the parent node
-                return self.scale[1] - (self.scale[1] - self.scale[0]) / 2
-            q = (self._Q - parent_init_Q) / scaler
+            if self._n_visits == 0:
+                q = 1
+            elif scaler == 0:
+                # here the current node must have been visited at least once but yielded the same return as the parent node
+                q = 0
+            else:
+                q = (self._Q - parent_init_Q) / scaler
             q = self._rescale(q, cur_scale=[-1, 1])
         else:
             # default case
             # if self._n_visits == 0:
-            #     return 1
+            #     q = 1
             # check for different variants
             if parent_max_Q - parent_min_Q == 0:
                 # q = self._Q
@@ -175,6 +174,7 @@ class TreeNode:
                 # q = np.clip((self._Q - mean_value) / (max_value - min_value), 0, 1)
                 q = (self._Q - mean_Q) / (parent_max_Q - parent_min_Q)
                 # q = 1 - (max_value - self._Q) / (max_value - min_value) # in [0,1]
+            q = self._rescale(q, cur_scale=[-1, 1])
         return q
 
     def add_virtual_loss(self, virtual_loss):
@@ -211,20 +211,21 @@ class MCTS:
         epsilon=0.91,
     ):
         self._net = net
-        self._c_puct = c_puct
-        self._n_playout = n_playout
-        self.n_parallel = n_parallel
-        self.virtual_loss = virtual_loss
-        self.epsilon = epsilon
         self.q_init = None
         self._root = None
+        # hyperparameters
+        self.virtual_loss = virtual_loss
+        self._n_playout = n_playout
+        self.n_parallel = n_parallel
+        self._c_puct = c_puct
+        self.epsilon = epsilon
 
     def initialize_search(self, env, group_size=1):
         self.env = env
         self.step = 0
         self.exploration_rating = 0
         state = self.env.initial_state(group_size=group_size)
-        self._root = TreeNode(state, None, 1.0, self.q_init, epsilon=self.epsilon)
+        self._root = TreeNode(state, None, 1.0, self.q_init)
         return state
 
     def prepare_net(self, n_parallel):
@@ -290,11 +291,6 @@ class MCTS:
             # set the qinit and value after the first evaluation of the root node
             # based on the value following the rollout policy
             # min and max values are important for the selection process of child nodes
-            if self.step == 0 and self.cur_playout == 0:
-                root_value = float(values[0].max(dim=-1)[0].max(dim=-1)[0])
-                self.q_init = 1.1 * root_value
-                self._root.q_init = self.q_init
-                pass
             for idx, (leaf, leaf_state, ps, value) in enumerate(
                 zip(leaves, leaf_states, priors, values)
             ):
@@ -314,7 +310,7 @@ class MCTS:
                 # compute all possible states based on the available actions
                 # next_states = [self.env.next_state(leaf.state, available_actions[:,:,i]) for i in range(num_ava_actions)]
                 # expand all the leaves (each leave will be fully expanded)
-                leaf.expand(available_actions, prior)  # , next_states)
+                leaf.expand(available_actions, prior, self.epsilon)  # , next_states)
 
     def evaluate_leaves(self, leaf_states):
         # conversion to multi state
@@ -410,9 +406,7 @@ class MCTS:
             # transition root state based on action and save in new state
             self._root._parent = None
         else:
-            self._root = TreeNode(
-                last_state, None, 1.0, self.q_init, epsilon=self.epsilon
-            )
+            self._root = TreeNode(last_state, None, 1.0, self.q_init)
 
 
 class MCTSAgent(BaseAgent):
