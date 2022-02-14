@@ -24,7 +24,7 @@ def extract_test_set_info(test_set_name):
 
 
 def prepare_test_result_folder(test_config):
-    save_dir = test_config.save_dir
+    save_dir = f"{test_config.save_dir}/{test_config.test_type}"
     time_id = datetime.datetime.now(pytz.timezone("Europe/Berlin")).strftime(
         "%Y-%m-%d_%H:%M:%S"
     )
@@ -43,21 +43,28 @@ def prepare_test_result_folder(test_config):
         ssteps = test_config.sampling_steps
 
     result_folder_no_postfix = (
-        f"{save_dir}/{test_set_name}/{time_id}__n_{num_nodes}_{num_samples}_"
-        f"traj_{trajs}_ssteps_{ssteps}"
+        f"{time_id}__n_{num_nodes}_{num_samples}_traj_{trajs}_ssteps_{ssteps}"
     )
+
     # add pomo aug identifier
     if test_config.use_pomo_aug:
         result_folder_no_postfix = f"{result_folder_no_postfix}_pomo_aug"
 
     if test_config.use_mcts:
         result_folder_no_postfix = f"{result_folder_no_postfix}_mcts"
-
-    result_folder_path = result_folder_no_postfix
+    
+    if test_config.experiment_name is None:
+        result_folder_path_simple = (
+            f"{save_dir}/{test_set_name}/{result_folder_no_postfix}"
+        )
+    else:
+        result_folder_path_simple = f"{save_dir}/{test_set_name}/{test_config.experiment_name}/{result_folder_no_postfix}"
+    # add extra number if duplicate
+    result_folder_path = result_folder_path_simple
     folder_idx = 0
     while os.path.exists(result_folder_path):
         folder_idx += 1
-        result_folder_path = result_folder_no_postfix + "({})".format(folder_idx)
+        result_folder_path = result_folder_path_simple + "({})".format(folder_idx)
     return result_folder_path
 
 
