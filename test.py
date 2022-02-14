@@ -6,7 +6,7 @@ import wandb
 from main_code.utils.torch_objects import device
 from main_code.nets.pomo import PomoNetwork
 from main_code.agents.policy_agent import PolicyAgent
-from main_code.agents.mcts_agent import MCTSAgent, MCTSBatchAgent
+from main_code.agents.mcts_agent import MCTSAgent, MCTSBatchAgent, MCTS
 from main_code.utils.logging.logging import get_test_logger
 from main_code.utils.config.config import Config
 from main_code.tester.tsp_tester import TSPTester
@@ -32,9 +32,15 @@ def parse_args():
     parser.add_argument(
         "--use_mcts", dest="use_mcts", default=False, action="store_true"
     )
-    parser.add_argument("--num_playouts", type=int, default=10)
     parser.add_argument("--c_puct", type=float, default=7.5)
+    parser.add_argument("--epsilon", type=float, default=0.91)
+    parser.add_argument("--node_value_scale", nargs=2, type=int, default=[0, 1])
+    parser.add_argument("--expansion_limit", type=int, default=None)
+    parser.add_argument("--node_value_term", type=str, default=None)
+    parser.add_argument("--prob_term", type=str, default="puct")
+    parser.add_argument("--num_playouts", type=int, default=10)
     parser.add_argument("--num_parallel", type=int, default=1)
+    parser.add_argument("--virtual_loss", type=int, default=0)
     # batchsize only relevant for speed, depends on gpu memory
     parser.add_argument("--test_batch_size", type=int, default=1024)
     # random test set specifications
@@ -48,8 +54,11 @@ def parse_args():
     )  # later add clustered
     # saved test set
     parser.add_argument("--test_set", type=str, default="uniform_n_20_128")
+    parser.add_argument("--test_type", type=str, default="valid")
     # save options
-    parser.add_argument("--save_dir", type=str, default="./logs/test")
+    parser.add_argument("--save_dir", type=str, default="./results")
+    parser.add_argument("--experiment_name", type=str, default=None)
+    parser.add_argument("--job_type", type=str, default=None)
     opts = parser.parse_known_args()[0]
     return opts
 
@@ -73,7 +82,7 @@ if __name__ == "__main__":
         test_config.test_set_path = None
     else:
         # check whether test set exists if not throw error
-        test_config.test_set_path = f"./data/test_sets/{opts.test_set}"
+        test_config.test_set_path = f"./data/{opts.test_type}_sets/{opts.test_set}"
 
     # adjust settings for mcts
     if test_config.use_mcts:
@@ -85,8 +94,19 @@ if __name__ == "__main__":
     # Init logger
     logger, result_folder_path = get_test_logger(test_config)
     # save config to log folder
+    if test_config.use_mcts:
+        # prepare mcts_config and use as direct input for agent
+        mcts_config = Config()
+        mcts_config.set_defaults(MCTS)
+        # overwrite with parse values
+        mcts_config.from_class(test_config)
+        config.mcts = mcts_config
     config.to_yaml(f"{result_folder_path}/config.yml", nested=True)
-    wandb.init(config=test_config)
+    wandb.init(
+        config=test_config,
+        group=test_config.experiment_name,
+        job_type=test_config.job_type,
+    )
 
     # Load Model
     actor_group = PomoNetwork(config).to(device)
@@ -95,13 +115,8 @@ if __name__ == "__main__":
 
     # select the agent
     if test_config.use_mcts:
-        agent = MCTSAgent(
-            actor_group,
-            c_puct=test_config.c_puct,
-            n_playout=test_config.num_playouts,
-            n_parallel=test_config.num_parallel,
-        )
-        # agent = MCTSBatchAgent(actor_group, c_puct=test_config.c_puct, n_playout=test_config.num_playouts, n_parallel=test_config.num_parallel)
+        agent = MCTSAgent(actor_group, mcts_config.to_dict(False))
+        # agent = MCTSBatchAgent(actor_group, c_puct=test_config.c_puct, n_playout=test_config.num_playouts, num_parallel=test_config.num_parallel)
     else:
         agent = PolicyAgent(actor_group)
 
