@@ -188,8 +188,8 @@ class TreeNode:
             q = self._rescale(q, cur_scale=[0, 1], target_scale=node_value_scale)
         else:
             # default case
-            # if self._n_visits == 0:
-            #     q = 1
+            if self._n_visits == 0:
+                q = 1
             # check for different variants
             if parent_max_Q - parent_min_Q == 0:
                 # assign zero if the parent node (and potentially sub nodes) have been explored,
@@ -235,7 +235,7 @@ class MCTS:
         virtual_loss=20,
         epsilon=0.91,
         expansion_limit=None,
-        node_value_scale=[-1, 1],
+        node_value_scale="[-1,1]",
         node_value_term="",
         prob_term="puct",
         aggregation_strategy=0,
@@ -251,7 +251,10 @@ class MCTS:
         self._c_puct = c_puct
         self.epsilon = epsilon
         self.expansion_limit = expansion_limit
-        self.node_value_scale = node_value_scale
+        # convert string representation of node value scale to list
+        self.node_value_scale = [
+            int(val) for val in node_value_scale.strip("][").split(",")
+        ]
         self.node_value_term = node_value_term
         self.prob_term = prob_term
         self.aggregation_strategy = aggregation_strategy
