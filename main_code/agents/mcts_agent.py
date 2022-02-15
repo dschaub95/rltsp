@@ -26,12 +26,6 @@ class TreeNode:
         self.max_Q = q_init
         self.min_Q = q_init
         self.n_vlosses = 0
-
-        self.prob_transfo = None
-        # different value variants
-        self.node_value_term = "default"
-        self.prob_term = "puct"  # "pucb"
-        self.node_value_scale = [-1, 1]
         # only add for debugging
         self.orig_prob = orig_prob
         # add depth to a node for debugging
@@ -51,17 +45,23 @@ class TreeNode:
         probs = (1 - epsilon) * probs + epsilon * uniform_probs
         return probs
 
-    def expand(self, actions, priors, epsilon):
+    def expand(
+        self, actions, priors, epsilon, aggregation_strategy, expansion_limit=None
+    ):
         # fully expands a leaf considering all possible actions in this state
         # modify probabilitiy vector to favor exploration here
-        probs_0 = priors.mean(dim=1).mean(dim=0).detach().cpu().numpy()
+        if aggregation_strategy == 0:
+            probs_0 = priors.mean(dim=1).mean(dim=0).detach().cpu().numpy()
         # probs_0 = priors.max(dim=1)[0].mean(dim=0).detach().cpu().numpy()
         # probs_0 = priors.max(dim=1)[0].max(dim=0)[0].detach().cpu().numpy()
         # add exploration noise or rather smooth the probabilities
         if self.depth >= 0:
             probs = self._transform_policy(probs_0, epsilon)
         # only expand kth most promising children
-        k = probs.shape[0]
+        if expansion_limit is None:
+            k = probs.shape[0]
+        else:
+            k = np.clip(expansion_limit, 1, probs.shape[0])
         for i, prob in enumerate(probs[0:k]):
             action = actions[:, :, i]
             # state = states[i]
@@ -70,15 +70,18 @@ class TreeNode:
                     None, self, prob, self.q_init, orig_prob=probs_0[i]
                 )
 
-    def select(self, c_puct):
+    def select(self, c_puct, node_value_term, node_value_scale, prob_term):
         # give all value to the value calculation --> selection function should not change, just the formula
         child_Qs = [node._Q for node in self._children.values()]
+        mean_Q = np.mean(child_Qs)
         # child_Qs = [q for q in child_Qs if q is not None]
         # test epsilon greedy action selection
         # select the best child
         best_child = max(
             self._children.items(),
-            key=lambda item: item[1].get_value(c_puct, child_Qs),
+            key=lambda item: item[1].get_value(
+                c_puct, mean_Q, node_value_term, node_value_scale, prob_term
+            ),
         )
         return best_child
 
@@ -88,6 +91,7 @@ class TreeNode:
         self._n_visits += visits
 
     def update(self, leaf_value):
+        self._n_visits += 1
         # if the leaf was selected for the first time or is terminal always use its value to overwrite any bad init value
         if self._n_visits <= 1:
             # always keep initial q value as base line for evaluation of the leaf nodes
@@ -102,54 +106,58 @@ class TreeNode:
             self.min_Q = leaf_value if leaf_value < self.min_Q else self.min_Q
 
     def update_recursive(self, leaf_value):
-        # max over trajectories and mean over batch for now
         if self._parent:
             self._parent.update_recursive(leaf_value)
         leaf_value = float(leaf_value.max(dim=-1)[0].max(dim=-1)[0])
         self.update(leaf_value)
 
-    def get_value(self, c_puct, neighbor_Qs):
+    def get_value(self, c_puct, mean_Q, node_value_term, node_value_scale, prob_term):
         # compute value for selection, higher is better
         # check for different variants of prob term
         # alpha zero variant of puct
-        self._u = self._calc_prob_term(c_puct)
+        self._u = self._calc_prob_term(c_puct, prob_term)
         # orig formula
         # self._u = (c_puct * self._P * math.sqrt(self._parent._n_visits + 1) / (1 + self._n_visits))
 
-        node_value = self._calc_node_value(neighbor_Qs)
+        node_value = self._calc_node_value(mean_Q, node_value_term, node_value_scale)
         value = node_value + self._u
         # print(value)
         return value
 
-    def _calc_prob_term(self, c_puct):
-        if self.prob_term == "puct":
+    def _calc_prob_term(self, c_puct, prob_term):
+        if prob_term == "puct":
             return (
                 c_puct
                 * self._P
                 * math.sqrt(self._parent._n_visits)
                 / (1 + self._n_visits)
             )
-        elif self.prob_term == "pucb":
+        elif prob_term == "pucb":
             # two terms
-            return 0
+            term_1 = math.sqrt(
+                3 * math.log(self._parent._n_visits) / (2 * (self._n_visits + 1))
+            )
+            term_2 = (2 / self._P) * math.sqrt(
+                math.log(self._parent._n_visits) / self._parent._n_visits
+            )
+            return term_1 - term_2
 
-    def _rescale(self, value, cur_scale=[0, 1]):
-        scale = self.node_value_scale
+    def _rescale(self, value, cur_scale, target_scale):
         # assumes value is scaled to [0,1]
         value = (value - cur_scale[0]) / (cur_scale[1] - cur_scale[0])
-        value = value * (scale[1] - scale[0]) + scale[0]
+        value = value * (target_scale[1] - target_scale[0]) + target_scale[0]
         return value
 
-    def _calc_node_value(self, neighbor_Qs):
+    def _calc_node_value(self, mean_Q, node_value_term, node_value_scale):
         # calculates just the node value --> includes different variants
         max_Q = self.max_Q
         min_Q = self.min_Q
         parent_max_Q = self._parent.max_Q
         parent_min_Q = self._parent.min_Q
         parent_init_Q = self._parent.q_init
-        mean_Q = np.mean(neighbor_Qs)
         # should be one if not yet approximated
-        if self.node_value_term == "test_1":
+        if node_value_term == "game":
+            # +1 if win -1 if lose against baseline
             scaler = max(parent_max_Q - parent_init_Q, parent_init_Q - parent_min_Q)
             if self._n_visits == 0:
                 q = 1
@@ -158,14 +166,32 @@ class TreeNode:
                 q = 0
             else:
                 q = (self._Q - parent_init_Q) / scaler
-            q = self._rescale(q, cur_scale=[-1, 1])
+            q = self._rescale(q, cur_scale=[-1, 1], target_scale=node_value_scale)
+        elif node_value_term == "game_asym":
+            if self._n_visits == 0:
+                q = 1
+            elif self._Q == parent_init_Q:
+                # here the current node must have been visited at least once but yielded the same return as the parent node
+                q = 0
+            elif self._Q - parent_init_Q > 0:
+                q = (self._Q - parent_init_Q) / (parent_max_Q - parent_init_Q)
+            else:
+                q = (self._Q - parent_init_Q) / (parent_init_Q - parent_min_Q)
+            q = self._rescale(q, cur_scale=[-1, 1], target_scale=node_value_scale)
+        elif node_value_term == "smooth":
+            if self._n_visits == 0:
+                q = 1
+            elif parent_max_Q - parent_min_Q == 0:
+                q = 0.5
+            else:
+                q = 1 - (parent_max_Q - self._Q) / (parent_max_Q - parent_min_Q)
+            q = self._rescale(q, cur_scale=[0, 1], target_scale=node_value_scale)
         else:
             # default case
             # if self._n_visits == 0:
             #     q = 1
             # check for different variants
             if parent_max_Q - parent_min_Q == 0:
-                # q = self._Q
                 # assign zero if the parent node (and potentially sub nodes) have been explored,
                 # but giving a return not worse or better than the leaf calculated after first selection
                 q = 0
@@ -174,7 +200,7 @@ class TreeNode:
                 # q = np.clip((self._Q - mean_value) / (max_value - min_value), 0, 1)
                 q = (self._Q - mean_Q) / (parent_max_Q - parent_min_Q)
                 # q = 1 - (max_value - self._Q) / (max_value - min_value) # in [0,1]
-            q = self._rescale(q, cur_scale=[-1, 1])
+            q = self._rescale(q, cur_scale=[-1, 1], target_scale=node_value_scale)
         return q
 
     def add_virtual_loss(self, virtual_loss):
@@ -185,7 +211,7 @@ class TreeNode:
 
     def revert_virtual_loss(self, virtual_loss):
         if self._parent:
-            self._parent.add_virtual_loss(virtual_loss)
+            self._parent.revert_virtual_loss(virtual_loss)
         self.n_vlosses -= 1
         self._n_visits -= virtual_loss
 
@@ -203,22 +229,32 @@ class MCTS:
     def __init__(
         self,
         net,
-        c_puct=5,
-        n_playout=400,
-        n_parallel=2,
+        c_puct=7.5,
+        num_playouts=10,
+        num_parallel=1,
         virtual_loss=20,
-        q_init=-5,
         epsilon=0.91,
+        expansion_limit=None,
+        node_value_scale=[-1, 1],
+        node_value_term="",
+        prob_term="puct",
+        aggregation_strategy=0,
     ):
         self._net = net
         self.q_init = None
         self._root = None
+        self.cur_best_return = None
         # hyperparameters
         self.virtual_loss = virtual_loss
-        self._n_playout = n_playout
-        self.n_parallel = n_parallel
+        self._n_playout = num_playouts
+        self.n_parallel = num_parallel
         self._c_puct = c_puct
         self.epsilon = epsilon
+        self.expansion_limit = expansion_limit
+        self.node_value_scale = node_value_scale
+        self.node_value_term = node_value_term
+        self.prob_term = prob_term
+        self.aggregation_strategy = aggregation_strategy
 
     def initialize_search(self, env, group_size=1):
         self.env = env
@@ -247,7 +283,12 @@ class MCTS:
         while True:
             if current.is_leaf():
                 break
-            act, current = current.select(self._c_puct)
+            act, current = current.select(
+                self._c_puct,
+                self.node_value_term,
+                self.node_value_scale,
+                self.prob_term,
+            )
             leaf_state = self.env.next_state(leaf_state, act)
             # print(act)
             # print(current.state.selected_node_list)
@@ -270,10 +311,13 @@ class MCTS:
                 # and update the value along the way
                 leaf.update_recursive(leaf_value)
             else:
-                # leaf.add_virtual_loss(self.virtual_loss)
+                leaf.add_virtual_loss(self.virtual_loss)
                 leaves.append(leaf)
                 leaf_states.append(leaf_state)
-            leaf.add_visits(visits=1)
+            # leaf.add_visits(visits=1)
+            # when running the first overall selection break after first iteration
+            if self.step == 0 and self.cur_playout == 0:
+                break
 
         if leaves:
             # if self.step < 2:
@@ -288,12 +332,11 @@ class MCTS:
             #     leaf.revert_virtual_loss(self.virtual_loss)
             # Calc priors and values together
             values, priors = self.evaluate_leaves(leaf_states)
-            # set the qinit and value after the first evaluation of the root node
-            # based on the value following the rollout policy
-            # min and max values are important for the selection process of child nodes
+            #
             for idx, (leaf, leaf_state, ps, value) in enumerate(
                 zip(leaves, leaf_states, priors, values)
             ):
+                leaf.revert_virtual_loss(self.virtual_loss)
                 ### update_value
                 # in 1d case convert tensor to float
                 leaf.update_recursive(value)
@@ -307,10 +350,15 @@ class MCTS:
                 available_actions = torch.gather(
                     available_actions, dim=-1, index=indices
                 )
-                # compute all possible states based on the available actions
-                # next_states = [self.env.next_state(leaf.state, available_actions[:,:,i]) for i in range(num_ava_actions)]
                 # expand all the leaves (each leave will be fully expanded)
-                leaf.expand(available_actions, prior, self.epsilon)  # , next_states)
+                leaf.expand(
+                    available_actions,
+                    prior,
+                    self.epsilon,
+                    self.aggregation_strategy,
+                    self.expansion_limit,
+                )
+            # check if any new tour is better than current best tour --> fully add nodes to mct
 
     def evaluate_leaves(self, leaf_states):
         # conversion to multi state
@@ -383,15 +431,13 @@ class MCTS:
 
     def get_move_values(self):
         # add number of current simulations to n_playout to handle sub tree roots which have already been visited
-        current_simulations = self._root._n_visits
         self.cur_playout = 0
-        # while self._root._n_visits < self._n_playout + current_simulations:
         # print(f"Starting playout number {self.cur_playout}")
         while self.cur_playout < self._n_playout:
             self._playout(self.n_parallel)
             self.cur_playout += 1
         act_values_states = [
-            (act, node._Q, node.state, node._P)
+            (act, node._Q, node.state, node.orig_prob, node._n_visits)
             for act, node in self._root._children.items()
         ]
         return zip(*act_values_states)
@@ -413,22 +459,12 @@ class MCTSAgent(BaseAgent):
     def __init__(
         self,
         policy_net,
-        c_puct=1.3,
-        n_playout=10,
-        n_parallel=1,
-        virtual_loss=0,
+        mcts_config,
     ) -> None:
         super().__init__(policy_net)
-        self.mcts = MCTS(policy_net, c_puct, n_playout, n_parallel, virtual_loss)
+        self.mcts = MCTS(policy_net, **mcts_config)
 
     def reset(self, state: GroupState):
-        # set different q_init for different tsp size
-        # if state.tsp_size == 20:
-        #     self.mcts.q_init = -5
-        # elif state.tsp_size == 50:
-        #     self.mcts.q_init = -7
-        # elif state.tsp_size == 100:
-        #     self.mcts.q_init = -10
         # init new environment model based on state
         # handle data batch sequentially for now
         env = GroupEnvironment(state.data, state.tsp_size)
@@ -439,21 +475,20 @@ class MCTSAgent(BaseAgent):
 
     def get_action(self, state):
         # print(self.mcts._net.encoded_nodes)
-        acts, values, states, priors = self.mcts.get_move_values()
-        # print(values)
-        # print(acts)
-        # print(values)
-        # print(states)
-
+        acts, values, states, priors, n_visits = self.mcts.get_move_values()
         # select best action based on values
         idx = np.argmax(values)
-        # print(values)
-        # print(priors)
         # update mcts tree
         self.mcts.update_with_move(acts[idx])
         # print(values)
         # if self.mcts.step >= 19:
         #     print(self.mcts.exploration_rating)
+        action_info = {
+            "orig_prob_action": priors[idx],
+            "values": values,
+            "priors": priors,
+            "n_visits": n_visits,
+        }
         return acts[idx]
 
 
