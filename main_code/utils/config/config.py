@@ -74,7 +74,7 @@ class Config:
         # or get them froman external config file which is predetermined
         pass
 
-    def _set_defaults(self, _class, restrictive=False):
+    def set_defaults(self, _class, restrictive=False):
         # retrieve defaults form another class
         full_args_spec = inspect.getfullargspec(_class.__init__)
         args = [arg for arg in full_args_spec.args if not arg == "self"]
