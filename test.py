@@ -29,12 +29,13 @@ def parse_args():
         "--use_pomo_aug", dest="use_pomo_aug", default=False, action="store_true"
     )
     parser.add_argument("--sampling_steps", type=int, default=1)
-    parser.add_argument(
-        "--use_mcts", dest="use_mcts", default=False, action="store_true"
-    )
+    # parser.add_argument(
+    #     "--use_mcts", dest="use_mcts", default=False, action="store_true"
+    # )
+    parser.add_argument("--use_mcts", type=int, default=0)
     parser.add_argument("--c_puct", type=float, default=7.5)
     parser.add_argument("--epsilon", type=float, default=0.91)
-    parser.add_argument("--node_value_scale", nargs=2, type=int, default=[-1, 1])
+    parser.add_argument("--node_value_scale", type=str, default="[-1,1]")
     parser.add_argument("--expansion_limit", type=int, default=None)
     parser.add_argument("--node_value_term", type=str, default=None)
     parser.add_argument("--prob_term", type=str, default="puct")
