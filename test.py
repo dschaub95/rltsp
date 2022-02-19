@@ -25,9 +25,10 @@ def parse_args():
     parser.add_argument("--config_path", type=str, default="./configs/default.json")
     # test hyperparmeters -> influence performance
     parser.add_argument("--num_trajectories", type=int, default=1)
-    parser.add_argument(
-        "--use_pomo_aug", dest="use_pomo_aug", default=False, action="store_true"
-    )
+    parser.add_argument("--use_pomo_aug", type=int, default=0)
+    # parser.add_argument(
+    #     "--use_pomo_aug", dest="use_pomo_aug", default=False, action="store_true"
+    # )
     parser.add_argument("--sampling_steps", type=int, default=1)
     # parser.add_argument(
     #     "--use_mcts", dest="use_mcts", default=False, action="store_true"
@@ -87,10 +88,10 @@ if __name__ == "__main__":
 
     # adjust settings for mcts
     if test_config.use_mcts:
-        # test_config.num_trajectories = 1
         test_config.test_batch_size = (
             8 if test_config.use_pomo_aug else test_config.sampling_steps
         )
+        # handle mcts seperately in tester and only load chunks suitable for the mcts
 
     # Init logger
     logger, result_folder_path = get_test_logger(test_config)
