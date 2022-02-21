@@ -8,7 +8,7 @@ import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
 
 from main_code.utils.torch_objects import Tensor, LongTensor, device
-from main_code.utils.utils import Average_Meter
+from main_code.utils.utils import AverageMeter
 from main_code.utils.data.data_loader import TSP_DATA_LOADER__RANDOM
 from main_code.utils.logging.logging import Get_Logger
 from main_code.environment.environment import GroupEnvironment
@@ -79,8 +79,8 @@ def train_one_epoch(config, actor_group, epoch, timer_start, logger):
 
     actor_group.train()
 
-    distance_AM = Average_Meter()
-    actor_loss_AM = Average_Meter()
+    distance_AM = AverageMeter()
+    actor_loss_AM = AverageMeter()
 
     train_loader = TSP_DATA_LOADER__RANDOM(
         num_samples=config.TRAIN_DATASET_SIZE,
@@ -189,7 +189,7 @@ def validate(config, actor_group, epoch, timer_start, logger):
 
     actor_group.eval()
 
-    eval_dist_AM = Average_Meter()
+    eval_dist_AM = AverageMeter()
     if config.TSP_SIZE == 5:
         raise NotImplementedError
     elif config.TSP_SIZE == 10:

@@ -6,7 +6,7 @@ import pandas as pd
 import json
 from main_code.utils.torch_objects import device, Tensor, LongTensor
 from main_code.environment.environment_new import GroupEnvironment
-from main_code.utils.utils import Average_Meter
+from main_code.utils.utils import AverageMeter
 from main_code.utils.data.tsp_transformer import get_group_travel_distances_sampling
 from main_code.utils.data.data_loader import (
     RandomTSPTestDataLoader,
@@ -77,7 +77,7 @@ class TSPTester:
         agent.eval()
 
         # init this every time
-        eval_dist_AM_0 = Average_Meter()
+        eval_dist_AM_0 = AverageMeter()
 
         self.logger.info(
             "==================================================================="
@@ -107,7 +107,7 @@ class TSPTester:
                 agent.reset(group_state)
 
                 while not done:
-                    action = agent.get_action(group_state)
+                    action, action_info = agent.get_action(group_state)
                     # shape = (batch, group)
                     group_state, reward, done = env.step(action)
 

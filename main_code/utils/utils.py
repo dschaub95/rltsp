@@ -3,9 +3,9 @@ import torch
 from main_code.utils.torch_objects import device
 
 
-class Average_Meter:
+class AverageMeter:
     """
-    Class to keep track of the length of the current tour
+    Class to keep track of the average length of tours
     """
 
     def __init__(self):
