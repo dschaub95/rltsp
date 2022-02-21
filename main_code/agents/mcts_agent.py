@@ -178,6 +178,26 @@ class TreeNode:
             else:
                 q = (self._Q - parent_init_Q) / (parent_init_Q - parent_min_Q)
             q = self._rescale(q, cur_scale=[-1, 1], target_scale=node_value_scale)
+        elif node_value_term == "game_jump":
+            if self._n_visits == 0:
+                q = 1
+            elif self._Q - parent_init_Q == 0:
+                q = 0.0
+            elif self._Q > parent_init_Q:
+                q = 1
+            else:
+                q = -1
+            q = self._rescale(q, cur_scale=[-1, 1], target_scale=node_value_scale)
+        elif node_value_term == "game_clipped":
+            if self._n_visits == 0:
+                q = 1
+            elif self._Q == parent_init_Q:
+                q = 0.0
+            else:
+                # factor 10 corresponds to 10 percent error or improvement clipping
+                factor = 10
+                q = np.clip(factor * (1 - self._Q / parent_init_Q), -1, 1)
+            q = self._rescale(q, cur_scale=[-1, 1], target_scale=node_value_scale)
         elif node_value_term == "smooth":
             if self._n_visits == 0:
                 q = 1
@@ -492,7 +512,7 @@ class MCTSAgent(BaseAgent):
             "priors": priors,
             "n_visits": n_visits,
         }
-        return acts[idx]
+        return acts[idx], action_info
 
 
 class MCTSBatchAgent(BaseAgent):
@@ -514,13 +534,6 @@ class MCTSBatchAgent(BaseAgent):
         self.q_init = q_init
 
     def reset(self, state: GroupState):
-        # set different q_init for different tsp size
-        if state.tsp_size == 20:
-            self.q_init = -5
-        elif state.tsp_size == 50:
-            self.q_init = -7
-        elif state.tsp_size == 100:
-            self.q_init = -10
         # make batch calculation for the encoded nodes
         self.model.reset(state)
         self.encoded_nodes_list = [
