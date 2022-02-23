@@ -36,6 +36,7 @@ def parse_args():
     parser.add_argument("--use_mcts", type=int, default=0)
     parser.add_argument("--c_puct", type=float, default=7.5)
     parser.add_argument("--epsilon", type=float, default=0.91)
+    parser.add_argument("--weight_fac", type=float, default=50)
     parser.add_argument("--node_value_scale", type=str, default="[-1,1]")
     parser.add_argument("--expansion_limit", type=int, default=None)
     parser.add_argument("--node_value_term", type=str, default=None)

@@ -70,7 +70,9 @@ class TreeNode:
                     None, self, prob, self.q_init, orig_prob=probs_0[i]
                 )
 
-    def select(self, c_puct, node_value_term, node_value_scale, prob_term):
+    def select(
+        self, c_puct, node_value_term, node_value_scale, prob_term, weight_fac=50
+    ):
         # give all value to the value calculation --> selection function should not change, just the formula
         child_Qs = [node._Q for node in self._children.values()]
         mean_Q = np.mean(child_Qs)
@@ -80,7 +82,7 @@ class TreeNode:
         best_child = max(
             self._children.items(),
             key=lambda item: item[1].get_value(
-                c_puct, mean_Q, node_value_term, node_value_scale, prob_term
+                c_puct, mean_Q, node_value_term, node_value_scale, prob_term, weight_fac
             ),
         )
         return best_child
@@ -111,7 +113,15 @@ class TreeNode:
         leaf_value = float(leaf_value.max(dim=-1)[0].max(dim=-1)[0])
         self.update(leaf_value)
 
-    def get_value(self, c_puct, mean_Q, node_value_term, node_value_scale, prob_term):
+    def get_value(
+        self,
+        c_puct,
+        mean_Q,
+        node_value_term,
+        node_value_scale,
+        prob_term,
+        weight_fac=50,
+    ):
         # compute value for selection, higher is better
         # check for different variants of prob term
         # alpha zero variant of puct
@@ -119,7 +129,9 @@ class TreeNode:
         # orig formula
         # self._u = (c_puct * self._P * math.sqrt(self._parent._n_visits + 1) / (1 + self._n_visits))
 
-        node_value = self._calc_node_value(mean_Q, node_value_term, node_value_scale)
+        node_value = self._calc_node_value(
+            mean_Q, node_value_term, node_value_scale, weight_fac
+        )
         value = node_value + self._u
         # print(value)
         return value
@@ -148,7 +160,9 @@ class TreeNode:
         value = value * (target_scale[1] - target_scale[0]) + target_scale[0]
         return value
 
-    def _calc_node_value(self, mean_Q, node_value_term, node_value_scale):
+    def _calc_node_value(
+        self, mean_Q, node_value_term, node_value_scale, weight_fac=50
+    ):
         # calculates just the node value --> includes different variants
         max_Q = self.max_Q
         min_Q = self.min_Q
@@ -194,9 +208,8 @@ class TreeNode:
             elif self._Q == parent_init_Q:
                 q = 0.0
             else:
-                # factor 10 corresponds to 10 percent error or improvement clipping
-                factor = 10
-                q = np.clip(factor * (1 - self._Q / parent_init_Q), -1, 1)
+                # factor 10 corresponds to 10 percent error or improvement clipping per node
+                q = np.clip(weight_fac * (1 - self._Q / parent_init_Q), -1, 1)
             q = self._rescale(q, cur_scale=[-1, 1], target_scale=node_value_scale)
         elif node_value_term == "smooth":
             if self._n_visits == 0:
@@ -254,6 +267,7 @@ class MCTS:
         num_parallel=1,
         virtual_loss=20,
         epsilon=0.91,
+        weight_fac=50,
         expansion_limit=None,
         node_value_scale="[-1,1]",
         node_value_term="",
@@ -270,6 +284,7 @@ class MCTS:
         self.n_parallel = num_parallel
         self._c_puct = c_puct
         self.epsilon = epsilon
+        self.weight_fac = weight_fac
         self.expansion_limit = expansion_limit
         # convert string representation of node value scale to list
         self.node_value_scale = [
@@ -311,6 +326,7 @@ class MCTS:
                 self.node_value_term,
                 self.node_value_scale,
                 self.prob_term,
+                self.weight_fac,
             )
             leaf_state = self.env.next_state(leaf_state, act)
             # print(act)
