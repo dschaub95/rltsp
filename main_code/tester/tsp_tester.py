@@ -173,7 +173,22 @@ class TSPTester:
                 log_str = f"Ep:{episode_str} ({percent:5}%)  T:{timestr}  avg.dist:{avg_length}  avg.error:{avg_error}%"
                 self.logger.info(log_str)
                 logger_start = time.time()
-            wandb.log({"avg_error": self.result.avg_approx_error})
+            wandb.log(
+                {
+                    "avg_error": self.result.avg_approx_error
+                }  # , "action_info": action_info}
+            )
+        log_data = {
+            "sample_id": np.arange(len(self.result.approx_errors)),
+            "approx_errors": self.result.approx_errors,
+            "pred_lengths": self.result.pred_lengths,
+        }
+        log_tbl = wandb.Table(data=pd.DataFrame(log_data))
+        wandb.log({"run_metrics": log_tbl})
+        # also upload found tours
+        tour_data = {f"Instance {i}": tour for i, tour in enumerate(self.result.tours)}
+        tour_tbl = wandb.Table(data=pd.DataFrame(tour_data))
+        wandb.log({"tours": tour_tbl})
         # add some more infos to the result object
         self.result.computation_time = timestr
         return self.result
