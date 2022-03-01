@@ -34,12 +34,12 @@ def parse_args():
     #     "--use_mcts", dest="use_mcts", default=False, action="store_true"
     # )
     parser.add_argument("--use_mcts", type=int, default=0)
-    parser.add_argument("--c_puct", type=float, default=7.5)
-    parser.add_argument("--epsilon", type=float, default=0.91)
+    parser.add_argument("--c_puct", type=float, default=2.0)
+    parser.add_argument("--epsilon", type=float, default=0.6)
     parser.add_argument("--weight_fac", type=float, default=50)
-    parser.add_argument("--node_value_scale", type=str, default="[-1,1]")
+    parser.add_argument("--node_value_scale", type=str, default="[0,1]")
     parser.add_argument("--expansion_limit", type=int, default=None)
-    parser.add_argument("--node_value_term", type=str, default=None)
+    parser.add_argument("--node_value_term", type=str, default="smooth")
     parser.add_argument("--prob_term", type=str, default="puct")
     parser.add_argument("--num_playouts", type=int, default=10)
     parser.add_argument("--num_parallel", type=int, default=1)
@@ -62,6 +62,7 @@ def parse_args():
     parser.add_argument("--save_dir", type=str, default="./results")
     parser.add_argument("--experiment_name", type=str, default=None)
     parser.add_argument("--job_type", type=str, default=None)
+    parser.add_argument("--wandb_mode", type=str, default=None)
     opts = parser.parse_known_args()[0]
     return opts
 
@@ -107,6 +108,7 @@ if __name__ == "__main__":
     config.to_yaml(f"{result_folder_path}/config.yml", nested=True)
     wandb.init(
         config=test_config,
+        mode=test_config.wandb_mode,
         group=test_config.experiment_name,
         job_type=test_config.job_type,
     )
