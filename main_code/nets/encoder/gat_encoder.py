@@ -8,7 +8,7 @@ from main_code.nets.utils.multi_head_attention import (
     multi_head_attention,
 )
 
-# taken from Joshi et al.
+# taken from Kwon et al., Kool et al.
 
 
 class Encoder(nn.Module):
