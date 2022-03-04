@@ -6,9 +6,10 @@ class BaseAgent:
         self.model.eval()
 
     def reset(self, state):
+        # encode a new state
         self.model.reset(state)
 
-    def fine_tune(self, data_loader):
+    def learn(self):
         raise NotImplementedError
 
     def get_action(self, state):
