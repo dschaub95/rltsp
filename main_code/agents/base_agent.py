@@ -8,5 +8,8 @@ class BaseAgent:
     def reset(self, state):
         self.model.reset(state)
 
+    def fine_tune(self, data_loader):
+        raise NotImplementedError
+
     def get_action(self, state):
         raise NotImplementedError
