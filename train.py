@@ -48,9 +48,6 @@ def train(config, save_dir="./logs", save_folder_name="train"):
 
         #  EVAL
         #######################################################
-        # valid_avg_len = validate(config, actor, **log_package)
-        # valid_avg_error = 0
-
         valid_result = validate_new(config, actor)
         valid_avg_error = valid_result.avg_approx_error
         valid_avg_len = valid_result.avg_length
@@ -219,85 +216,6 @@ def validate_new(config, actor_group):
     # run test
     test_result = tester.test(agent)
     return test_result
-
-
-# eval_result = []
-
-
-# def update_eval_result(old_result):
-#     global eval_result
-#     eval_result = old_result
-
-# def validate(config, actor_group, epoch, timer_start, logger):
-
-#     global eval_result
-
-#     actor_group.eval()
-
-#     eval_dist_AM = AverageMeter()
-#     if config.TSP_SIZE == 5:
-#         raise NotImplementedError
-#     elif config.TSP_SIZE == 10:
-#         raise NotImplementedError
-#     else:
-#         test_loader = TSP_DATA_LOADER__RANDOM(
-#             num_samples=config.TEST_DATASET_SIZE,
-#             num_nodes=config.TSP_SIZE,
-#             batch_size=config.TEST_BATCH_SIZE,
-#         )
-
-#     for data in test_loader:
-#         # data.shape = (batch_s, TSP_SIZE, 2)
-#         batch_s = data.size(0)
-
-#         with torch.no_grad():
-#             env = GroupEnvironment(data, config.TSP_SIZE)
-#             group_s = config.TSP_SIZE
-#             group_state, reward, done = env.reset(group_size=group_s)
-#             actor_group.reset(group_state)
-
-#             # First Move is given
-#             first_action = LongTensor(np.arange(group_s))[None, :].expand(
-#                 batch_s, group_s
-#             )
-#             group_state, reward, done = env.step(first_action)
-
-#             while not done:
-#                 # actor_group.update(group_state)
-#                 action_probs = actor_group.get_action_probabilities(group_state)
-#                 # shape = (batch, group, TSP_SIZE)
-#                 action = action_probs.argmax(dim=2)
-#                 # shape = (batch, group)
-#                 group_state, reward, done = env.step(action)
-
-#         max_reward, _ = reward.max(dim=1)
-#         eval_dist_AM.push(-max_reward)  # reward was given as negative dist
-
-#     # LOGGING
-#     dist_avg = eval_dist_AM.result()
-#     eval_result.append(dist_avg)
-
-#     logger.info(
-#         "--------------------------------------------------------------------------"
-#     )
-#     log_str = "  <<< EVAL after Epoch:{:03d} >>>   Avg.dist:{:f}".format(
-#         epoch, dist_avg
-#     )
-#     logger.info(log_str)
-#     logger.info(
-#         "--------------------------------------------------------------------------"
-#     )
-#     logger.info("eval_result = {}".format(eval_result))
-#     logger.info(
-#         "--------------------------------------------------------------------------"
-#     )
-#     logger.info(
-#         "--------------------------------------------------------------------------"
-#     )
-#     logger.info(
-#         "--------------------------------------------------------------------------"
-#     )
-#     return dist_avg
 
 
 if __name__ == "__main__":
