@@ -183,6 +183,7 @@ def train_one_epoch(config, actor_group, epoch, timer_start, logger):
         if episode % log_episode == 0 or episode == config.TRAIN_DATASET_SIZE:
             timestr = time.strftime("%H:%M:%S", time.gmtime(time.time() - timer_start))
             actor_loss_result = actor_loss_AM.result()
+            avg_tour_len = distance_AM.result()
             log_str = "Ep:{:03d}-{:07d}({:5.1f}%)  T:{:s}  ALoss:{:+5f}  CLoss:{:5f}  Avg.dist:{:5f}".format(
                 epoch,
                 episode,
@@ -190,15 +191,13 @@ def train_one_epoch(config, actor_group, epoch, timer_start, logger):
                 timestr,
                 actor_loss_result,
                 0,
-                distance_AM.result(),
+                avg_tour_len,
             )
             logger.info(log_str)
             logger_start = time.time()
     # LR STEP, after each epoch
     actor_group.lr_stepper.step()
-    actor_loss = actor_loss_AM.result()
-    pred_len = distance_AM.result()
-    return pred_len, actor_loss
+    return avg_tour_len, actor_loss_result
 
 
 def validate_new(config, actor_group):
