@@ -200,3 +200,17 @@ class TSPDataSetRandom(Dataset):
 
     def __len__(self):
         return self.num_samples
+
+
+class TSPDataSetRandomOrig(Dataset):
+    def __init__(self, num_samples, num_nodes):
+        self.num_samples = num_samples
+        self.num_nodes = num_nodes
+
+    def __getitem__(self, index):
+        node_xy_data = np.random.rand(self.num_nodes, 2)
+
+        return node_xy_data
+
+    def __len__(self):
+        return self.num_samples

@@ -14,6 +14,7 @@ from main_code.utils.data.tsp_transformer import (
 )
 from main_code.utils.data.data_sets import (
     TSPDataSetRandom,
+    TSPDataSetRandomOrig,
     RandomTSPTestSet,
     DiskTSPTestSet,
 )
