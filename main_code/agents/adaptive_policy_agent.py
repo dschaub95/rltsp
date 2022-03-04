@@ -7,16 +7,24 @@ import torch
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
 from main_code.utils.torch_objects import Tensor, LongTensor, device
+from main_code.environment.environment_new import (
+    GroupEnvironment,
+    GroupState,
+    MultiGroupState,
+)
 
-
+# think about implementing external fine tuner
 class AdaptivePolicyAgent(PolicyAgent):
     def __init__(self, policy_net) -> None:
+        # extra hyperpramaters for learning as mcts
+        # specifically should have parameter defining the batch size for learning and the state space size
+        # and standard learning parameters
+        self.env_model = GroupEnvironment
         super().__init__(policy_net)
 
     def fine_tune(
         self,
         data_loader,
-        env_model,
         tsp_size,
         group_s,
         num_epochs=8,
@@ -53,7 +61,7 @@ class AdaptivePolicyAgent(PolicyAgent):
 
                 # Actor Group Move
                 ###############################################
-                env = env_model(batch, tsp_size)
+                env = self.env_model(batch, tsp_size)
                 group_state, reward, done = env.reset(group_size=group_s)
                 self.policy_net.reset(group_state)
 
@@ -91,6 +99,7 @@ class AdaptivePolicyAgent(PolicyAgent):
                         (group_prob_list, chosen_action_prob[:, :, None]), dim=2
                     )
                 max_reward, group_loss = self.learn(reward, group_prob_list)
+
                 distance_AM.push(-max_reward)  # reward was given as negative dist
                 actor_loss_AM.push(group_loss.detach().reshape(-1))
                 # compare with opt len (for tuning on validation set)
