@@ -25,7 +25,7 @@ class TSPTester:
 
     def __init__(
         self,
-        logger,
+        logger=None,
         num_trajectories=1,
         num_nodes=100,
         num_samples=10000,
@@ -74,25 +74,24 @@ class TSPTester:
         self.num_nodes = self.data_loader.num_nodes
 
     def test(self, agent):
+        self.result = TSPTestResult()
         agent.eval()
 
         # init this every time
         eval_dist_AM_0 = AverageMeter()
-
-        self.logger.info(
-            "==================================================================="
-        )
-        self.logger.info(f"Number of considered trajectories: {self.num_trajectories}")
-        self.logger.info(f"Number of sampling steps: {self.sampling_steps}")
-        self.logger.info(f"Using POMO augmentation: {self.use_pomo_aug}")
+        if self.logger is not None:
+            self.logger.info(
+                "==================================================================="
+            )
+            self.logger.info(
+                f"Number of considered trajectories: {self.num_trajectories}"
+            )
+            self.logger.info(f"Number of sampling steps: {self.sampling_steps}")
+            self.logger.info(f"Using POMO augmentation: {self.use_pomo_aug}")
 
         timer_start = time.time()
         logger_start = time.time()
         episode = 0
-        # for batch in self.data_loader:
-        #     batch = Tensor(batch)
-        #     batch_s = batch.size(0)
-        #     episode += batch_s / self.sampling_steps
         for node_batch, opt_lens in self.data_loader:
             # print(opt_lens)
             batch = Tensor(node_batch)
@@ -160,37 +159,40 @@ class TSPTester:
             self.result.avg_length = eval_dist_AM_0.peek()
             self.result.tours.extend(final_tours.tolist())
             # do the logging
-            if (time.time() - logger_start > self.log_period_sec) or (
-                episode >= self.num_samples
-            ):
-                timestr = time.strftime(
-                    "%H:%M:%S", time.gmtime(time.time() - timer_start)
-                )
-                percent = np.round((episode / self.num_samples) * 100, 1)
-                episode_str = f"{int(episode)}".zfill(len(str(int(self.num_samples))))
-                avg_length = np.round(self.result.avg_length, 7)
-                avg_error = np.round(self.result.avg_approx_error, 7)
-                log_str = f"Ep:{episode_str} ({percent:5}%)  T:{timestr}  avg.dist:{avg_length}  avg.error:{avg_error}%"
-                self.logger.info(log_str)
-                logger_start = time.time()
-            wandb.log(
-                {
-                    "avg_error": self.result.avg_approx_error
-                }  # , "action_info": action_info}
-            )
-        log_data = {
-            "sample_id": np.arange(len(self.result.approx_errors)),
-            "approx_errors": self.result.approx_errors,
-            "pred_lengths": self.result.pred_lengths,
-        }
-        log_tbl = wandb.Table(data=pd.DataFrame(log_data))
-        wandb.log({"run_metrics": log_tbl})
-        # also upload found tours
-        tour_data = {f"Instance {i}": tour for i, tour in enumerate(self.result.tours)}
-        tour_tbl = wandb.Table(data=pd.DataFrame(tour_data))
-        wandb.log({"tours": tour_tbl})
-        # add some more infos to the result object
-        self.result.computation_time = timestr
+            if self.logger is not None:
+                # maybe also log action info
+                wandb.log({"avg_error": self.result.avg_approx_error})
+                if (time.time() - logger_start > self.log_period_sec) or (
+                    episode >= self.num_samples
+                ):
+                    timestr = time.strftime(
+                        "%H:%M:%S", time.gmtime(time.time() - timer_start)
+                    )
+                    percent = np.round((episode / self.num_samples) * 100, 1)
+                    episode_str = f"{int(episode)}".zfill(
+                        len(str(int(self.num_samples)))
+                    )
+                    avg_length = np.round(self.result.avg_length, 7)
+                    avg_error = np.round(self.result.avg_approx_error, 7)
+                    log_str = f"Ep:{episode_str} ({percent:5}%)  T:{timestr}  avg.dist:{avg_length}  avg.error:{avg_error}%"
+                    self.logger.info(log_str)
+                    logger_start = time.time()
+        if self.logger is not None:
+            log_data = {
+                "sample_id": np.arange(len(self.result.approx_errors)),
+                "approx_errors": self.result.approx_errors,
+                "pred_lengths": self.result.pred_lengths,
+            }
+            log_tbl = wandb.Table(data=pd.DataFrame(log_data))
+            wandb.log({"run_metrics": log_tbl})
+            # also upload found tours
+            tour_data = {
+                f"Instance {i}": tour for i, tour in enumerate(self.result.tours)
+            }
+            tour_tbl = wandb.Table(data=pd.DataFrame(tour_data))
+            wandb.log({"tours": tour_tbl})
+            # add some more infos to the result object
+            self.result.computation_time = timestr
         return self.result
 
     def save_results(self, file_path):

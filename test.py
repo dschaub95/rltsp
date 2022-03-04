@@ -145,6 +145,6 @@ if __name__ == "__main__":
         test_batch_size=test_config.test_batch_size,
     )
     # run test
-    tester.test(agent)
+    test_result = tester.test(agent)
     # save results
     tester.save_results(file_path=f"{result_folder_path}/result.json")
