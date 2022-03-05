@@ -3,6 +3,7 @@ import random
 import time
 import os
 import math
+import json
 import argparse
 import torch
 import torch.optim as optim
@@ -15,7 +16,7 @@ from main_code.utils.data.data_loader import TSP_DATA_LOADER__RANDOM
 from main_code.utils.logging.logging import Get_Logger
 from main_code.environment.environment import GroupEnvironment
 from main_code.utils.config.config import get_config
-from main_code.tester.tsp_tester import TSPTester
+from main_code.testing.tsp_tester import TSPTester
 from main_code.agents.policy_agent import PolicyAgent
 
 from main_code.nets.pomo import PomoNetwork
@@ -91,6 +92,9 @@ def train(config, save_dir="./logs", save_folder_name="train"):
                 checkpoint_folder_path
             )
             torch.save(actor.lr_stepper.state_dict(), lr_stepper_save_path)
+            # save config
+            with open(f"{checkpoint_folder_path}/config.json", "w") as f:
+                json.dump(config._items, f, indent=2)
 
 
 def train_one_epoch(config, actor_group, epoch, timer_start, logger):
@@ -243,4 +247,5 @@ if __name__ == "__main__":
         # group=config.experiment_name,
         job_type="training",
     )
+    config = wandb.config
     train(config, save_dir=opts.save_dir, save_folder_name=opts.save_folder_name)
