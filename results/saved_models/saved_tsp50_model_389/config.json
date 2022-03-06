@@ -1,0 +1,27 @@
+{
+    "TSP_SIZE": 50,
+  
+    "TOTAL_EPOCH": 2000,
+  
+    "TRAIN_DATASET_SIZE": 1e+5,
+    "TEST_DATASET_SIZE": 1e+4,
+    "TRAIN_BATCH_SIZE": 64,
+    "TEST_BATCH_SIZE": 1024,
+    "valid_path": "./data/valid_sets/uniform_n_50_10000",
+  
+    "EMBEDDING_DIM": 128,
+    "KEY_DIM": 16,
+    "HEAD_NUM": 8,
+    "ENCODER_LAYER_NUM": 6,
+    "FF_HIDDEN_DIM": 512,
+    "LOGIT_CLIPPING": 10,
+  
+    "ACTOR_LEARNING_RATE": 1e-4,
+    "ACTOR_WEIGHT_DECAY": 1e-6,
+      
+    "LR_DECAY_EPOCH": 1,
+    "LR_DECAY_GAMMA": 1.00,
+    
+    "LOG_PERIOD_SEC": 5
+  }
+  
