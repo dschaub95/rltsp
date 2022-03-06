@@ -2,16 +2,18 @@ from torch import nn
 
 
 class CriticNetwork(nn.Module):
-    def __init__(self, 
-                 embedding_dim,
-                 encoder,
-                 n_encode_layers,
-                 aggregation="sum",
-                 normalization="layer",
-                 learn_norm=True,
-                 track_norm=False,
-                 gated=True,
-                 n_heads=8):
+    def __init__(
+        self,
+        embedding_dim,
+        encoder,
+        n_encode_layers,
+        aggregation="sum",
+        normalization="layer",
+        learn_norm=True,
+        track_norm=False,
+        gated=True,
+        n_heads=8,
+    ):
         """Critic model for enabling RL training with critic baseline
 
         References:
@@ -22,21 +24,23 @@ class CriticNetwork(nn.Module):
         super(CriticNetwork, self).__init__()
 
         self.encoder = encoder
-        
+
         self.init_embed = nn.Linear(2, embedding_dim, bias=True)
-        self.encoder = self.encoder(n_layers=n_encode_layers, 
-                                    n_heads=n_heads,
-                                    hidden_dim=embedding_dim, 
-                                    aggregation=aggregation, 
-                                    norm=normalization, 
-                                    learn_norm=learn_norm,
-                                    track_norm=track_norm,
-                                    gated=gated)
+        self.encoder = self.encoder(
+            n_layers=n_encode_layers,
+            n_heads=n_heads,
+            hidden_dim=embedding_dim,
+            aggregation=aggregation,
+            norm=normalization,
+            learn_norm=learn_norm,
+            track_norm=track_norm,
+            gated=gated,
+        )
 
         self.value_head = nn.Sequential(
             nn.Linear(embedding_dim, embedding_dim),
             nn.ReLU(),
-            nn.Linear(embedding_dim, 1)
+            nn.Linear(embedding_dim, 1),
         )
 
     def forward(self, inputs, graph):

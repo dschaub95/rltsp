@@ -1,4 +1,3 @@
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -8,7 +7,6 @@ from main_code.nets.decoder.mha_decoder import MHADecoder
 
 
 class PomoNetwork(nn.Module):
-
     def __init__(self, config):
         super().__init__()
         self.box_select_probabilities = None
@@ -39,15 +37,17 @@ class PomoNetwork(nn.Module):
         if encoded_nodes is None:
             encoded_nodes = self.encoded_nodes
 
-        encoded_last_nodes = pick_nodes_for_each_group(encoded_nodes, 
-                                                       group_state.current_node, 
-                                                       self.EMBEDDING_DIM)
-        encoded_first_nodes = pick_nodes_for_each_group(encoded_nodes,
-                                                        group_state.selected_node_list[:,:,0],
-                                                        self.EMBEDDING_DIM)
+        encoded_last_nodes = pick_nodes_for_each_group(
+            encoded_nodes, group_state.current_node, self.EMBEDDING_DIM
+        )
+        encoded_first_nodes = pick_nodes_for_each_group(
+            encoded_nodes, group_state.selected_node_list[:, :, 0], self.EMBEDDING_DIM
+        )
         # shape = (batch_s, group, EMBEDDING_DIM)
 
-        probs = self.node_prob_calculator(encoded_first_nodes, encoded_last_nodes, group_state.ninf_mask)
+        probs = self.node_prob_calculator(
+            encoded_first_nodes, encoded_last_nodes, group_state.ninf_mask
+        )
         # shape = (batch_s, group, TSP_SIZE)
         self.box_select_probabilities = probs
         return self.box_select_probabilities

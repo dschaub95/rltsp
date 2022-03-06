@@ -6,5 +6,6 @@ conda install -y pyg -c pyg -c conda-forge
 conda install -y numpy scipy cython tqdm scikit-learn matplotlib seaborn tensorboard pandas networkx
 conda install -y jupyterlab -c conda-forge
 pip install tensorboard_logger
+pip install pytorch-lightning
 pip install wandb
 pip install tsplib95

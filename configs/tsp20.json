@@ -1,12 +1,13 @@
 {
     "TSP_SIZE": 20,
   
-    "TOTAL_EPOCH": 400,
+    "TOTAL_EPOCH": 2000,
   
     "TRAIN_DATASET_SIZE": 1e+5,
     "TEST_DATASET_SIZE": 1e+4,
     "TRAIN_BATCH_SIZE": 64,
     "TEST_BATCH_SIZE": 1024,
+    "valid_path": "./data/valid_sets/uniform_n_20_10000",
   
     "EMBEDDING_DIM": 128,
     "KEY_DIM": 16,

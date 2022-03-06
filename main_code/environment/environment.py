@@ -29,14 +29,18 @@ class GroupState:
         # shape = (batch, group, tsp_size)
 
     def compute_path_len(self):
-        gathering_index = self.selected_node_list.unsqueeze(3).expand(self.batch_s, -1, self.tsp_size, 2)
+        gathering_index = self.selected_node_list.unsqueeze(3).expand(
+            self.batch_s, -1, self.tsp_size, 2
+        )
         # shape = (batch, group, tsp_size, 2)
-        seq_expanded = self.data[:, None, :, :].expand(self.batch_s, self.group_s, self.tsp_size, 2)
+        seq_expanded = self.data[:, None, :, :].expand(
+            self.batch_s, self.group_s, self.tsp_size, 2
+        )
         ordered_seq = seq_expanded.gather(dim=2, index=gathering_index)
         # shape = (batch, group, tsp_size, 2)
 
         rolled_seq = ordered_seq.roll(dims=2, shifts=-1)
-        segment_lengths = ((ordered_seq-rolled_seq)**2).sum(3).sqrt()
+        segment_lengths = ((ordered_seq - rolled_seq) ** 2).sum(3).sqrt()
         # size = (batch, group, tsp_size)
 
         group_travel_distances = segment_lengths.sum(2)
@@ -50,22 +54,27 @@ class GroupState:
         ####################################
         self.selected_count += 1
         self.current_node = selected_idx_mat
-        self.selected_node_list = torch.cat((self.selected_node_list, selected_idx_mat[:, :, None]), dim=2)
+        self.selected_node_list = torch.cat(
+            (self.selected_node_list, selected_idx_mat[:, :, None]), dim=2
+        )
 
         # Status
         ####################################
-        batch_idx_mat = torch.arange(self.batch_s)[:, None].expand(self.batch_s, self.group_s)
-        group_idx_mat = torch.arange(self.group_s)[None, :].expand(self.batch_s, self.group_s)
+        batch_idx_mat = torch.arange(self.batch_s)[:, None].expand(
+            self.batch_s, self.group_s
+        )
+        group_idx_mat = torch.arange(self.group_s)[None, :].expand(
+            self.batch_s, self.group_s
+        )
         self.ninf_mask[batch_idx_mat, group_idx_mat, selected_idx_mat] = -np.inf
-    
+
     @property
     def available_actions(self):
         # return all currently available actions
         pass
-    
+
 
 class GroupEnvironment:
-
     def __init__(self, data, tsp_size):
         # seq.shape = (batch, tsp_size, 2)
 
@@ -78,7 +87,9 @@ class GroupEnvironment:
 
     def reset(self, group_size):
         self.group_s = group_size
-        self.group_state = GroupState(group_size=group_size, data=self.data, tsp_size=self.tsp_size)
+        self.group_state = GroupState(
+            group_size=group_size, data=self.data, tsp_size=self.tsp_size
+        )
         reward = None
         self.done = False
         return self.group_state, reward, self.done
@@ -90,7 +101,7 @@ class GroupEnvironment:
         self.group_state.move_to(selected_idx_mat)
 
         # returning values
-        self.done = (self.group_state.selected_count == self.tsp_size)
+        self.done = self.group_state.selected_count == self.tsp_size
         if self.done:
             reward = -self._get_group_travel_distance()  # note the minus sign!
         else:
@@ -99,18 +110,19 @@ class GroupEnvironment:
 
     def _get_group_travel_distance(self):
         return self.group_state.compute_path_len()
-    
+
     def isdone(self):
-        return (self.group_state.selected_count == self.tsp_size)
-    
+        return self.group_state.selected_count == self.tsp_size
+
     @staticmethod
     def is_done_state(group_state: GroupState):
-        return (group_state.selected_count == group_state.tsp_size)
+        return group_state.selected_count == group_state.tsp_size
 
     @staticmethod
     def get_return(group_state: GroupState):
         assert group_state.selected_count == group_state.tsp_size
         return group_state.compute_path_len()
+
 
 class State:
     def __init__(self, seq, tsp_size):
@@ -138,7 +150,10 @@ class State:
         self.selected_count += 1
         self.available_mask[torch.arange(self.batch_s), selected_node_idx] = False
         self.ninf_mask[torch.arange(self.batch_s), selected_node_idx] = -np.inf
-        self.selected_node_list = torch.cat((self.selected_node_list, selected_node_idx[:, None]), dim=1)
+        self.selected_node_list = torch.cat(
+            (self.selected_node_list, selected_node_idx[:, None]), dim=1
+        )
+
 
 class Environment:
     def __init__(self, seq, tsp_size):
@@ -172,31 +187,36 @@ class Environment:
 
     def _get_travel_distance(self):
 
-        gathering_index = self.state.selected_node_list.unsqueeze(2).expand(-1, self.tsp_size, 2)
+        gathering_index = self.state.selected_node_list.unsqueeze(2).expand(
+            -1, self.tsp_size, 2
+        )
         # shape = (batch, tsp_size, 2)
         ordered_seq = self.seq.gather(dim=1, index=gathering_index)
 
         rolled_seq = ordered_seq.roll(dims=1, shifts=-1)
-        segment_lengths = ((ordered_seq-rolled_seq)**2).sum(2).sqrt()
+        segment_lengths = ((ordered_seq - rolled_seq) ** 2).sum(2).sqrt()
         # size = (batch, tsp_size)
 
         travel_distances = segment_lengths.sum(1)
         # size = (batch,)
         return travel_distances
 
+
 class BaseState:
     def __init__(self) -> None:
         pass
 
+
 class BaseEnvironment:
     def __init__(self) -> None:
         pass
-    
+
     def step(self, action):
         pass
 
     def isdone(self, state):
         pass
+
 
 class TSPEnvironment(BaseEnvironment):
     def __init__(self) -> None:

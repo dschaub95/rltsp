@@ -1,7 +1,9 @@
 import numpy as np
+
 ########################################
 # View NN Parameters
 ########################################
+
 
 def get_n_params1(model):
     pp = 0
