@@ -99,10 +99,12 @@ class Config:
             # create new subconfigs based on structure
             # call from dict recursively for subconfigs
             if type(config_dict[key]) == dict:
-                self.__dict__[key] = Config()
-                self.__dict__[key].from_dict(config_dict[key], restrictive)
-            # write values for all keys
-            self.__dict__[key] = config_dict[key]
+                self.__dict__[key] = Config(
+                    config_dict=config_dict[key], restrictive=restrictive
+                )
+            else:
+                # write values for all keys
+                self.__dict__[key] = config_dict[key]
 
     def from_class(self, config_class, restrictive=True):
         self.from_dict(config_class.__dict__, restrictive)
