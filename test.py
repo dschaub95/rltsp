@@ -6,7 +6,8 @@ import wandb
 from main_code.utils.torch_objects import device
 from main_code.nets.pomo import PomoNetwork
 from main_code.agents.policy_agent import PolicyAgent
-from main_code.agents.mcts_agent import MCTSAgent, MCTSBatchAgent, MCTS
+from main_code.agents.mcts_agent.mcts_agent import MCTSAgent, MCTSBatchAgent
+from main_code.agents.mcts_agent.mcts import MCTS
 from main_code.utils.logging.logging import get_test_logger
 from main_code.utils.config.config import Config
 from main_code.testing.tsp_tester import TSPTester
