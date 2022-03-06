@@ -5,8 +5,9 @@ logs/train/*
 
 wandb/**
 
-results/**
+results/*
 !results/.gitkeep
+!results/saved_models
 
 data/**
 !data/.gitkeep
