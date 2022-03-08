@@ -43,10 +43,11 @@ def parse_mcts_args():
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--model_path", type=str, default="./results/saved_models/saved_tsp20_model_790"
+        "--model_path",
+        type=str,
+        default="./results/saved_models/saved_tsp20_model",
+        # default="./results/saved_models/saved_tsp50_model",
     )
-    # should not be necessary since config should be saved with the model
-    parser.add_argument("--config_path", type=str, default="./configs/tsp20.json")
     # test hyperparmeters -> influence performance
     parser.add_argument("--num_trajectories", type=int, default=1)
     parser.add_argument("--use_pomo_aug", type=int, default=0)
@@ -131,7 +132,7 @@ if __name__ == "__main__":
     # save config to log folder
     config.to_yaml(f"{result_folder_path}/config.yml", nested=True)
 
-    # Load Model
+    # Load Model - could be done inside agent
     actor_group = PomoNetwork(config).to(device)
     actor_model_save_path = f"{opts.model_path}/ACTOR_state_dic.pt"
     actor_group.load_state_dict(torch.load(actor_model_save_path, map_location=device))
