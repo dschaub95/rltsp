@@ -83,7 +83,14 @@ class RandomTSPTestDataLoader(TSPTestDataLoader):
 
 
 class DiskTSPTestDataLoader(TSPTestDataLoader):
-    def __init__(self, test_set_path, batch_size, use_pomo_aug=False, sampling_steps=1):
+    def __init__(
+        self,
+        test_set_path,
+        batch_size,
+        use_pomo_aug=False,
+        sampling_steps=1,
+        num_workers=0,
+    ):
         # load data set from disk
         self.test_set = DiskTSPTestSet(test_set_path, use_pomo_aug, sampling_steps)
         super().__init__(
@@ -92,6 +99,7 @@ class DiskTSPTestDataLoader(TSPTestDataLoader):
             collate_fn=TSP_general_collate_fn,
             use_pomo_aug=use_pomo_aug,
             sampling_steps=sampling_steps,
+            num_workers=num_workers,
         )
 
 
