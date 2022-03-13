@@ -1,5 +1,9 @@
 import numpy as np
 import argparse
+import sys
+import os
+
+sys.path.insert(1, os.getcwd())
 from main_code.utils.data.data_sets import DiskTSPTestSet
 from main_code.utils.data.utils import sample_and_save_subset
 
