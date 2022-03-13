@@ -34,9 +34,9 @@ def save_tsp():
     pass
 
 
-def sample_and_save_subset(dataset, save_path, seed=37):
+def sample_and_save_subset(dataset, save_path, sample_size=128, seed=37):
     random.seed(37)
-    indices = random.sample(range(len(dataset)), 128)
+    indices = random.sample(range(len(dataset)), sample_size)
     subset = torch.utils.data.Subset(dataset, indices)
     # save data in new folder
     # make sure length stays the same
