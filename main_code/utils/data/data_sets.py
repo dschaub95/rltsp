@@ -9,16 +9,6 @@ from main_code.utils.data.tsp_transformer import (
 )
 
 
-class TSPSample:
-    def __init__(
-        self, node_feats, opt_tour=None, opt_tour_len=None, edge_feats=None
-    ) -> None:
-        self.node_feats = node_feats
-        self.opt_tour = opt_tour
-        self.opt_tour_len = opt_tour_len
-        self.edge_feats = edge_feats
-
-
 class Generator:
     def __init__(self) -> None:
         self.num_samples = 0
@@ -50,7 +40,7 @@ class DiskGenerator(Generator):
             sol_dict = json.load(f)
         opt_tour = np.array(sol_dict["opt_tour"])
         opt_tour_len = sol_dict["opt_tour_length"]
-        return node_feats, opt_tour_len
+        return node_feats, opt_tour_len, opt_tour
 
 
 class RandomGenerator(Generator):
@@ -137,9 +127,11 @@ class TSPTestSet(TSPDataset):
             if type(raw_data) is not np.ndarray:
                 node_xy_data = raw_data[0]
                 self.last_opt_len = raw_data[1]
+                self.last_opt_tour = raw_data[2]
             else:
                 node_xy_data = raw_data
                 self.last_opt_len = np.nan
+                self.last_opt_tour = np.nan
             self.last_orig_problem = node_xy_data
             # reset transformer for sampling
             if self.sampling_steps > 1:
@@ -152,7 +144,7 @@ class TSPTestSet(TSPDataset):
             node_xy_data = self.random_transformer(self.last_orig_problem)
         # if we use augmentation it is relevant that we keep track of the original sample
         # and only generate a new one if we generated sampling steps - 1 many
-        return node_xy_data, self.last_opt_len
+        return node_xy_data, self.last_opt_len, self.last_opt_tour
 
 
 class RandomTSPTestSet(TSPTestSet):

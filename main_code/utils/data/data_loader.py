@@ -44,7 +44,7 @@ class TSPTestDataLoader(DataLoader):
         collate_fn,
         use_pomo_aug=False,
         sampling_steps=1,
-        num_workers=8,
+        num_workers=4,
     ):
         # modify batch size in case augmentation is used, such that augmented samples all fit into the same batch
         if use_pomo_aug:
@@ -89,7 +89,7 @@ class DiskTSPTestDataLoader(TSPTestDataLoader):
         batch_size,
         use_pomo_aug=False,
         sampling_steps=1,
-        num_workers=0,
+        num_workers=4,
     ):
         # load data set from disk
         self.test_set = DiskTSPTestSet(test_set_path, use_pomo_aug, sampling_steps)
@@ -130,8 +130,17 @@ def TSP_general_collate_fn(batch):
     else:
         num_feats = tmp_arr[0].shape[1]
     node_feats_batch = np.concatenate(tmp_arr[:, 0]).reshape(batch_s, -1, num_feats)
-    # node_feats_batch = Tensor(node_feats_batch)
-    # opt_tour_batch = np.concatenate(tmp_arr[:,1]).reshape(batch_s,-1).astype(np.int8)
+    # num_nodes = node_feats_batch.shape[1]
+    # if num_entries == 2:
+    #     opt_len_batch = tmp_arr[:, 1].astype(np.float64)
+    #     opt_tour_batch = np.empty((batch_s, num_nodes)) * np.nan
+    # elif num_entries > 2:
+    #     opt_len_batch = tmp_arr[:, 1].astype(np.float64)
+    #     opt_tour_batch = np.concatenate(tmp_arr[:, 2]).reshape(batch_s, -1)
+    # else:
+    #     opt_len_batch = np.empty((batch_s,)) * np.nan
+    #     opt_tour_batch = np.empty((batch_s, num_nodes)) * np.nan
+    # return node_feats_batch, opt_len_batch, opt_tour_batch
     if num_entries > 1:
         opt_len_batch = tmp_arr[:, 1].astype(np.float64)
     else:
