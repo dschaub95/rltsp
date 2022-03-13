@@ -22,11 +22,17 @@ class DiskGenerator(Generator):
     Loads tsp instances from disk on the fly
     """
 
-    def __init__(self, dataset_path) -> None:
+    def __init__(self, dataset_path, load_heatmaps=False) -> None:
         super().__init__()
         self.path = dataset_path
-        self.loaded_instances = 0
-        self.num_samples = len(os.listdir(f"{self.path}"))
+        self.load_heatmaps = load_heatmaps
+        self.num_samples = len(
+            [
+                item
+                for item in os.listdir(f"{self.path}")
+                if os.path.isdir(f"{self.path}/{item}")
+            ]
+        )
 
     def get_new_instance(self, index):
         idx_str = f"{index}".zfill(len(str(self.num_samples)))
@@ -40,7 +46,11 @@ class DiskGenerator(Generator):
             sol_dict = json.load(f)
         opt_tour = np.array(sol_dict["opt_tour"])
         opt_tour_len = sol_dict["opt_tour_length"]
-        return node_feats, opt_tour_len, opt_tour
+        if self.load_heatmaps:
+            heatmap = np.loadtxt(f"{instance_path}/heatmap.txt")
+            return node_feats, opt_tour_len, opt_tour, heatmap
+        else:
+            return node_feats, opt_tour_len, opt_tour
 
 
 class RandomGenerator(Generator):
@@ -121,17 +131,18 @@ class TSPTestSet(TSPDataset):
     def __getitem__(self, index):
         step = index % self.sampling_steps
         true_index = int((index - step) / self.sampling_steps)
+        # enable iteration over dataset
+        if true_index >= self.__len__():
+            raise StopIteration
         if step == 0:
             raw_data = self._get_new_instance(true_index)
             # convert potential tuple to list or put array into list
             if type(raw_data) is not np.ndarray:
                 node_xy_data = raw_data[0]
-                self.last_opt_len = raw_data[1]
-                self.last_opt_tour = raw_data[2]
+                self.last_context = list(raw_data[1::])
             else:
                 node_xy_data = raw_data
-                self.last_opt_len = np.nan
-                self.last_opt_tour = np.nan
+                self.last_context = []
             self.last_orig_problem = node_xy_data
             # reset transformer for sampling
             if self.sampling_steps > 1:
@@ -144,7 +155,7 @@ class TSPTestSet(TSPDataset):
             node_xy_data = self.random_transformer(self.last_orig_problem)
         # if we use augmentation it is relevant that we keep track of the original sample
         # and only generate a new one if we generated sampling steps - 1 many
-        return node_xy_data, self.last_opt_len, self.last_opt_tour
+        return [node_xy_data] + self.last_context
 
 
 class RandomTSPTestSet(TSPTestSet):
@@ -158,8 +169,10 @@ class RandomTSPTestSet(TSPTestSet):
 
 
 class DiskTSPTestSet(TSPTestSet):
-    def __init__(self, test_set_path, use_pomo_aug=False, sampling_steps=1) -> None:
-        generator = DiskGenerator(test_set_path)
+    def __init__(
+        self, test_set_path, use_pomo_aug=False, sampling_steps=1, load_heatmaps=False
+    ) -> None:
+        generator = DiskGenerator(test_set_path, load_heatmaps)
         super().__init__(
             generator, use_pomo_aug=use_pomo_aug, sampling_steps=sampling_steps
         )
