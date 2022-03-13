@@ -127,8 +127,10 @@ def TSP_general_collate_fn(batch):
     num_entries = tmp_arr.shape[1]
     if num_entries > 1:
         num_feats = tmp_arr[0, 0].shape[1]
+        opt_len_batch = tmp_arr[:, 1].astype(np.float64)
     else:
         num_feats = tmp_arr[0].shape[1]
+        opt_len_batch = np.empty((batch_s,)) * np.nan
     node_feats_batch = np.concatenate(tmp_arr[:, 0]).reshape(batch_s, -1, num_feats)
     # num_nodes = node_feats_batch.shape[1]
     # if num_entries == 2:
@@ -141,8 +143,4 @@ def TSP_general_collate_fn(batch):
     #     opt_len_batch = np.empty((batch_s,)) * np.nan
     #     opt_tour_batch = np.empty((batch_s, num_nodes)) * np.nan
     # return node_feats_batch, opt_len_batch, opt_tour_batch
-    if num_entries > 1:
-        opt_len_batch = tmp_arr[:, 1].astype(np.float64)
-    else:
-        opt_len_batch = np.empty((batch_s,)) * np.nan
     return node_feats_batch, opt_len_batch
