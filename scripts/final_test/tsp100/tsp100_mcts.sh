@@ -16,7 +16,8 @@ CUDA_VISIBLE_DEVICES=$cuda_device python test.py \
 --use_mcts=1 \
 --use_pomo_aug=1 \
 --virtual_loss=20 \
---experiment_name=tsp100_mcts_test
+--experiment_name=tsp100_mcts_test \
+--job_type=test
 
 CUDA_VISIBLE_DEVICES=$cuda_device python test.py \
 --model_path=./results/saved_models/saved_tsp100_model \
@@ -33,4 +34,5 @@ CUDA_VISIBLE_DEVICES=$cuda_device python test.py \
 --use_mcts=1 \
 --use_pomo_aug=1 \
 --virtual_loss=20 \
---experiment_name=tsp100_mcts_test
+--experiment_name=tsp100_mcts_test \
+--job_type=test
