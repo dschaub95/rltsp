@@ -17,6 +17,7 @@ configs/sweeps
 configs/final_test
 
 scripts/*
+!scripts/data_handling
 !scripts/final_test
 
 **/__pycache__
