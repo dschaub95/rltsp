@@ -15,7 +15,7 @@ class PomoNetwork(nn.Module):
         self.EMBEDDING_DIM = config.EMBEDDING_DIM
 
         self.encoder = Encoder(config)
-        self.decoder = MHADecoder(config)
+        self.node_prob_calculator = MHADecoder(config)
 
         self.batch_s = None
         self.encoded_nodes = None
@@ -25,17 +25,15 @@ class PomoNetwork(nn.Module):
         self.encoded_nodes = self.encoder(group_state.data)
         # shape = (batch_s, TSP_SIZE, EMBEDDING_DIM)
 
-        self.decoder.reset(self.encoded_nodes)
+        self.node_prob_calculator.reset(self.encoded_nodes)
 
     def soft_reset(self, encoded_nodes):
         self.batch_s = encoded_nodes.size(0)
         self.encoded_nodes = encoded_nodes
-        self.decoder.reset(self.encoded_nodes)
+        self.node_prob_calculator.reset(self.encoded_nodes)
 
-    def get_action_probabilities(self, group_state, encoded_nodes=None):
-        # define optional input of encoded nodes
-        if encoded_nodes is None:
-            encoded_nodes = self.encoded_nodes
+    def get_action_probabilities(self, group_state):
+        encoded_nodes = self.encoded_nodes
 
         encoded_last_nodes = pick_nodes_for_each_group(
             encoded_nodes, group_state.current_node, self.EMBEDDING_DIM
@@ -45,12 +43,15 @@ class PomoNetwork(nn.Module):
         )
         # shape = (batch_s, group, EMBEDDING_DIM)
 
-        probs = self.decoder(
+        probs = self.node_prob_calculator(
             encoded_first_nodes, encoded_last_nodes, group_state.ninf_mask
         )
         # shape = (batch_s, group, TSP_SIZE)
         self.box_select_probabilities = probs
         return self.box_select_probabilities
+
+    def freeze_encoder(self):
+        pass
 
 
 def pick_nodes_for_each_group(encoded_nodes, node_index_to_pick, embed_dim):
