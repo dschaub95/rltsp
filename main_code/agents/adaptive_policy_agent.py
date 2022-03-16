@@ -18,13 +18,73 @@ import wandb
 import copy
 
 
+class ActionBuffer:
+    def __init__(self) -> None:
+        self.reset()
+
+    def get_action(self):
+        action = self.best_actions[:, self.counter, :]
+        self.counter += 1
+        return action
+
+    # def __getitem__(self, index):
+    #     # make actions easily acessible via index
+    #     return self.best_actions[:, index, :]
+
+    # def __len__(self):
+    #     if self.best_actions is None:
+    #         return 0
+    #     else:
+    #         return self.best_actions.size(1)
+
+    # def add_action(self, action):
+    #     # transform action into suitable shape
+    #     action = action[:, None, :]
+    #     # shape = (batch_s, num, trajects)
+    #     # add action to memory
+    #     if self.best_actions is None:
+    #         self.best_actions = action
+    #     else:
+    #         self.best_actions = torch.cat([self.best_actions, action], dim=1)
+
+    def _action_seq_to_tensor(self, action_seq):
+        # make this more efficient potentially
+        action_seq = [action[:, None, :] for action in action_seq]
+        action_tensor = torch.cat(action_seq, dim=1)
+        # action_tensor = torch.cat(action_seq).view(batch_s, -1, num_trajectories)
+        return action_tensor
+
+    def update(self, action_seq, lengths, indices=None):
+        # update the memory if an action sequence for any sample is better
+        # first check lengths
+        action_tensor = self._action_seq_to_tensor(action_seq)
+        if self.best_actions is None:
+            self.best_actions = action_tensor
+            self.best_lengths = lengths
+        else:
+            if indices is None:
+                # directly compare lengths and current best lengths
+                mask = lengths < self.best_lengths
+                # mask = mask[:, None, None].expand()
+                self.best_actions[mask, :, :] = action_tensor[mask, :, :]
+                self.best_lengths[mask] = lengths[mask]
+            else:
+                # compare lengths by extracting lengths based on indices
+                pass
+
+    def reset(self):
+        self.best_actions = None
+        self.best_lengths = None
+        self.counter = 0
+
+
 # think about implementing external fine tuner
 class AdaptivePolicyAgent(PolicyAgent):
     def __init__(
         self,
         policy_net,
-        num_epochs=1,
-        batch_size=32,
+        num_epochs=4,
+        batch_size=8,
         lr_rate=1e-4,
         weight_decay=1e-6,
         lr_decay_epoch=1.0,
@@ -44,14 +104,12 @@ class AdaptivePolicyAgent(PolicyAgent):
         self.lr_decay_gamma = lr_decay_gamma
 
         # maybe reduce this by only considereing best action and duplicating for other trajectories
-        self.action_buffer = []
-        self.act_counter = 0
+        self.action_buffer = ActionBuffer()
         super().__init__(policy_net)
         self.decoder_copy = copy.deepcopy(self.model.node_prob_calculator)
-
-    def reset_action_buffer(self):
-        self.action_buffer = []
-        self.act_counter = 0
+        # prepare some wandb stuff for model tracking
+        wandb.define_metric("adaptlr/epoch")
+        wandb.define_metric("adaptlr/*", step_metric="adaptlr/epoch")
 
     def reset(self, state):
         # the magic happens here
@@ -61,6 +119,7 @@ class AdaptivePolicyAgent(PolicyAgent):
         self.encoded_nodes_full = self.model.encoded_nodes
 
         # first run greedy decoding and save results
+        self.action_buffer.reset()
         greedy_lengths = self.solve_greedy(state)
 
         # initalize dataloader based on data
@@ -72,12 +131,8 @@ class AdaptivePolicyAgent(PolicyAgent):
             shuffle=True,
         )
 
-        # run fine tuning
-        self.fine_tune(state.group_s)
-
-        # fun final greedy evaluation
-        # only exchange action seqeunces where length is smaller
-        final_lengths = self.solve_greedy(state, soft_reset=True)
+        # run fine tuning (can be independent of group size but then training tours are harder to use)
+        self.run_adaptlr(state.group_s, state, greedy_lengths)
 
         # restore initial decoder weights (maybe speed up somehow?)
         self.model.node_prob_calculator = copy.deepcopy(self.decoder_copy)
@@ -85,23 +140,28 @@ class AdaptivePolicyAgent(PolicyAgent):
         # save all actions and output them one by one in get action
 
     def solve_greedy(self, state, soft_reset=False):
+        self.model.node_prob_calculator.eval()
         if soft_reset:
             self.model.soft_reset(self.encoded_nodes_full)
-        self.reset_action_buffer()
         global_env = GroupEnvironment(state.data, state.tsp_size)
         global_env.reset(state.group_s)
-        done = global_env.is_done
-        while not done:
-            action_probs = self.get_action_probabilities(state)
-            # shape = (batch, group, TSP_SIZE)
-            action = action_probs.argmax(dim=2)
-            self.action_buffer.append(action)
-            # shape = (batch, group)
-            state, reward, done = global_env.step(action)
-        max_reward, _ = reward.max(dim=1)
-        return max_reward
 
-    def fine_tune(self, group_s):
+        action_seq = []
+        with torch.no_grad():
+            done = global_env.is_done
+            while not done:
+                action_probs = self.get_action_probabilities(state)
+                # shape = (batch, group, TSP_SIZE)
+                action = action_probs.argmax(dim=2)
+                action_seq.append(action)
+                # shape = (batch, group)
+                state, reward, done = global_env.step(action)
+            max_reward, _ = reward.max(dim=1)
+        # update action buffer (check if found tours are better)
+        self.action_buffer.update(action_seq, -max_reward)
+        return -max_reward
+
+    def run_adaptlr(self, group_s, state, greedy_lengths):
         # at best take a dataloader based on the test dataset with the correct batchsize
         # otherwise init custom dataloader from a batch of data with the test batch size
         # (is strongly dependent on the test batch size and thus more complicated)
@@ -109,37 +169,33 @@ class AdaptivePolicyAgent(PolicyAgent):
         # enable training on decoder weights --> check if really necessary (should be enabled by default)
         # self.model.unfreeze_decoder()
 
-        # optimize only subset of parameters
-        self.optimizer = optim.Adam(
-            self.model.node_prob_calculator.parameters(),  # restrict parameters
-            lr=self.lr_rate,
-            weight_decay=self.weight_decay,
-        )
-        self.lr_stepper = lr_scheduler.StepLR(
-            self.optimizer,
-            step_size=self.lr_decay_epoch,
-            gamma=self.lr_decay_gamma,
-        )
+        self.setup_backprop()
+
         # make sure all output tensors have enabled grad for backprop
         with torch.enable_grad():
             for epoch in range(self.num_epochs):
                 # fine tuning should also return the best action sequence encountered during epoch
                 avg_tour_len, actor_loss_result = self.fine_tune_one_epoch(group_s)
+
                 # potentially run greedy decoding after each fine tuning epoch for validation (and also use this )
                 # compare with greedy len (for tuning on validation set)
-
-                # log metrics with wandb only after one epoch to prevent to much logging
-                # define epoch metric for plotting --> hopefully yields multiple plots in one
+                test_lengths = self.solve_greedy(state, soft_reset=True)
+                test_avg_length = float(test_lengths.mean())
+                improvement = (
+                    float((self.action_buffer.best_lengths / greedy_lengths).mean()) - 1
+                )
+                # log metrics with wandb only after one epoch to prevent too much logging
                 # log training behavior for each chunk of the data and also final performance
                 wandb.log(
                     {
-                        "fine_tune/loss": actor_loss_result,
-                        "fine_tune/avg_length": avg_tour_len,
+                        "adaptlr/epoch": epoch,
+                        "adaptlr/train_loss": actor_loss_result,
+                        "adaptlr/train_avg_length": avg_tour_len,
+                        "adaptlr/test_avg_length": test_avg_length,
+                        "adaptlr/test_improvement": improvement,
                     },
-                    commit=False,
+                    commit=True,
                 )
-            # select the best action sequence and store it (use concatenation)
-            # potentially set requires grad to false again
 
     def fine_tune_one_epoch(self, group_s):
         self.model.node_prob_calculator.train()
@@ -167,10 +223,10 @@ class AdaptivePolicyAgent(PolicyAgent):
             # self.model.reset(group_state)
             self.model.soft_reset(encoded_nodes)
             # First Move is given
-            first_action = LongTensor(np.arange(group_s))[None, :].expand(
-                batch_s, group_s
-            )
-            group_state, reward, done = local_env.step(first_action)
+            # first_action = LongTensor(np.arange(group_s))[None, :].expand(
+            #     batch_s, group_s
+            # )
+            # group_state, reward, done = local_env.step(first_action)
 
             group_prob_list = Tensor(np.zeros((batch_s, group_s, 0)))
             while not done:
@@ -196,7 +252,8 @@ class AdaptivePolicyAgent(PolicyAgent):
                     (group_prob_list, chosen_action_prob[:, :, None]), dim=2
                 )
             max_reward, group_loss = self.learn(reward, group_prob_list)
-            # compare max reward against greedy tour length --> if better exchange stored actions
+            # if better exchange stored actions
+
             distance_AM.push(-max_reward)  # reward was given as negative dist
             actor_loss_AM.push(group_loss.detach().reshape(-1))
         actor_loss_result = actor_loss_AM.result()
@@ -204,10 +261,22 @@ class AdaptivePolicyAgent(PolicyAgent):
         self.lr_stepper.step()
         return avg_tour_len, actor_loss_result
 
+    def setup_backprop(self):
+        # optimize only subset of parameters
+        self.optimizer = optim.Adam(
+            self.model.node_prob_calculator.parameters(),  # restrict parameters
+            lr=self.lr_rate,
+            weight_decay=self.weight_decay,
+        )
+        self.lr_stepper = lr_scheduler.StepLR(
+            self.optimizer,
+            step_size=self.lr_decay_epoch,
+            gamma=self.lr_decay_gamma,
+        )
+
     def get_action(self, state):
         # return stored action sequence one by one (at best make this somehow depend on state to double check)
-        action = self.action_buffer[self.act_counter]
-        self.act_counter += 1
+        action = self.action_buffer.get_action()
         action_info = None
         return action, action_info
 
