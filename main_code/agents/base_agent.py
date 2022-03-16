@@ -1,6 +1,9 @@
+from main_code.nets.pomo import PomoNetwork
+
+
 class BaseAgent:
     def __init__(self, net) -> None:
-        self.model = net
+        self.model: PomoNetwork = net
 
     def eval(self):
         self.model.eval()
