@@ -33,9 +33,9 @@ class PolicyAgent(BaseAgent):
         group_loss = -group_advantage * group_log_prob
         # shape = (batch, group)
         loss = group_loss.mean()
-
-        self.policy_net.optimizer.zero_grad()
+        # maybe store optimizer in network
+        self.optimizer.zero_grad()
         loss.backward()
-        self.policy_net.optimizer.step()
+        self.optimizer.step()
         max_reward, _ = group_reward.max(dim=1)
         return max_reward, group_loss
