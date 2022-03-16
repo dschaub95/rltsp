@@ -50,8 +50,9 @@ class PomoNetwork(nn.Module):
         self.box_select_probabilities = probs
         return self.box_select_probabilities
 
-    def freeze_encoder(self):
-        pass
+    def unfreeze_decoder(self, value=True):
+        for param in self.node_prob_calculator.parameters():
+            param.requires_grad = value
 
 
 def pick_nodes_for_each_group(encoded_nodes, node_index_to_pick, embed_dim):
