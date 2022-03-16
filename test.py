@@ -7,17 +7,21 @@ from main_code.utils.torch_objects import device
 from main_code.nets.pomo import PomoNetwork
 from main_code.agents.policy_agent import PolicyAgent
 from main_code.agents.mcts_agent.mcts_agent import MCTSAgent, MCTSBatchAgent
+from main_code.agents.adaptive_policy_agent import AdaptivePolicyAgent
 from main_code.agents.mcts_agent.mcts import MCTS
 from main_code.utils.logging.logging import get_test_logger
 from main_code.utils.config.config import Config
-from main_code.testing.tsp_tester import TSPTester
+
+# from main_code.testing.tsp_tester import TSPTester
+
+from main_code.testing.tsp_tester_new import TSPTester
 
 
 def main():
     pass
 
 
-def parse_adaptive_learning_args():
+def parse_adaptlr_args():
     parser = argparse.ArgumentParser()
     al_opts = parser.parse_known_args()[0]
     return al_opts
@@ -34,7 +38,7 @@ def parse_mcts_args():
     parser.add_argument("--node_value_term", type=str, default="smooth")
     parser.add_argument("--prob_term", type=str, default="puct")
     parser.add_argument("--num_playouts", type=int, default=10)
-    parser.add_argument("--num_parallel", type=int, default=1)
+    parser.add_argument("--num_parallel", type=int, default=8)
     parser.add_argument("--virtual_loss", type=int, default=20)
     mcts_opts = parser.parse_known_args()[0]
     return mcts_opts
@@ -55,6 +59,8 @@ def parse_args():
 
     # whether to use agent with mcts planning
     parser.add_argument("--use_mcts", type=int, default=0)
+    # use agent with adaptive learning
+    parser.add_argument("--use_adaptlr", type=int, default=0)
 
     # batchsize only relevant for speed, depends on gpu memory
     parser.add_argument("--test_batch_size", type=int, default=1024)
@@ -133,16 +139,18 @@ if __name__ == "__main__":
     config.to_yaml(f"{result_folder_path}/config.yml", nested=True)
 
     # Load Model - could be done inside agent
-    actor_group = PomoNetwork(config).to(device)
-    actor_model_save_path = f"{opts.model_path}/ACTOR_state_dic.pt"
-    actor_group.load_state_dict(torch.load(actor_model_save_path, map_location=device))
-
+    nnetwork = PomoNetwork(config).to(device)
+    model_save_path = f"{opts.model_path}/ACTOR_state_dic.pt"
+    nnetwork.load_state_dict(torch.load(model_save_path, map_location=device))
     # select the agent
     if config.test.use_mcts:
-        agent = MCTSAgent(actor_group, config.test.mcts.to_dict(False))
-        # agent = MCTSBatchAgent(actor_group, c_puct=config.test.c_puct, n_playout=config.test.num_playouts, num_parallel=config.test.num_parallel)
+        agent = MCTSAgent(nnetwork, config.test.mcts.to_dict(False))
+        # agent = MCTSBatchAgent(nnetwork, c_puct=config.test.c_puct, n_playout=config.test.num_playouts, num_parallel=config.test.num_parallel)
+    elif config.test.use_adaptlr:
+        # use default parameters for now
+        agent = AdaptivePolicyAgent(nnetwork)
     else:
-        agent = PolicyAgent(actor_group)
+        agent = PolicyAgent(nnetwork)
 
     # log model info
     fill_str = (
@@ -150,7 +158,7 @@ if __name__ == "__main__":
     )
     logger.info(fill_str)
     logger.info(fill_str)
-    logger.info(f"  <<< MODEL: {actor_model_save_path} >>>")
+    logger.info(f"  <<< MODEL: {model_save_path} >>>")
     # init tester
     tester = TSPTester(
         logger,
