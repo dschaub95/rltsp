@@ -206,6 +206,16 @@ class GroupEnvironment:
         self.group_state, reward, self.done = self.step(first_action)
         return self.group_state, reward, self.done
 
+    def reset_from_state(self, group_state):
+        self.group_state = group_state
+        self.group_s = group_state.group_s
+        self.done = self.is_done
+        if self.is_done:
+            reward = -self._get_group_travel_distance()  # note the minus sign!
+        else:
+            reward = None
+        return self.group_state, reward, self.done
+
     def initial_state(self, group_size):
         group_state, reward, done = self.reset(group_size)
         return group_state
