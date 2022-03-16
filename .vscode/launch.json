@@ -1,0 +1,51 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: test.py (mcts)",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/test.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--wandb_mode",
+                "disabled",
+                "--use_pomo_aug",
+                "1",
+                "--num_trajectories",
+                "20",
+                "--use_mcts",
+                "1",
+                "--test_type",
+                "valid",
+                "--test_set",
+                "uniform_n_20_128"
+            ]
+        },
+        {
+            "name": "Python: test.py (adaptlr)",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/test.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--wandb_mode",
+                "disabled",
+                "--use_pomo_aug",
+                "1",
+                "--num_trajectories",
+                "20",
+                "--use_adaptlr",
+                "1",
+                "--test_type",
+                "valid",
+                "--test_set",
+                "uniform_n_20_128"
+            ]
+            // "justMyCode": true
+        }
+    ]
+}

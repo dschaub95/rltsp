@@ -21,5 +21,5 @@ scripts/*
 !scripts/final_test
 
 **/__pycache__
-**/.vscode
+# **/.vscode
 .ipynb_checkpoints
