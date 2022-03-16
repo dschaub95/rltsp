@@ -52,6 +52,8 @@ class TSPTester:
         # implement later
         # self.env = GroupEnvironment()
         self.result = TSPTestResult()
+        wandb.define_metric("episode")
+        wandb.define_metric("avg_error", step_metric="episode")
 
     def _prepare_test_set(self, num_nodes, num_samples):
         if self.test_set_path is not None:
