@@ -227,7 +227,7 @@ class GroupEnvironment:
         self.group_state.transition(selected_idx_mat)
 
         # returning values
-        self.done = self.group_state.selected_count == self.tsp_size
+        self.done = self.is_done
         if self.is_done:
             reward = -self._get_group_travel_distance()  # note the minus sign!
         else:
@@ -239,7 +239,16 @@ class GroupEnvironment:
 
     @property
     def is_done(self):
-        return self.group_state.selected_count == self.tsp_size
+        if self.group_state.selected_count == self.tsp_size:
+            # make sanity check that each node was selected exactly once
+            # throw assertion error if not fullfilled
+            assert (
+                self.group_state.selected_node_list.sum(dim=-1)
+                == (self.tsp_size - 1) * self.tsp_size / 2
+            ).all()
+            return True
+        else:
+            return False
 
     @staticmethod
     def is_done_state(group_state: GroupState):
