@@ -7,6 +7,9 @@ from main_code.utils.torch_objects import device
 from main_code.nets.pomo import PomoNetwork
 from main_code.agents.policy_agent import PolicyAgent
 from main_code.agents.mcts_agent.mcts_agent import MCTSAgent, MCTSBatchAgent
+
+# from main_code.agents.adaptive_policy_agent_old import AdaptivePolicyAgent
+
 from main_code.agents.adaptive_policy_agent import AdaptivePolicyAgent
 from main_code.agents.mcts_agent.mcts import MCTS
 from main_code.utils.logging.logging import get_test_logger
@@ -23,8 +26,17 @@ def main():
 
 def parse_adaptlr_args():
     parser = argparse.ArgumentParser()
-    al_opts = parser.parse_known_args()[0]
-    return al_opts
+    # num_epochs=4,
+    # batch_size=8,
+    parser.add_argument("--num_epochs", type=int, default=4)
+    parser.add_argument("--batch_size", type=int, default=16)
+    parser.add_argument("--state_space_size", type=int, default=32)
+    parser.add_argument("--lr_rate", type=float, default=1e-4)
+    parser.add_argument("--weight_decay", type=float, default=1e-6)
+    parser.add_argument("--lr_decay_epoch", type=float, default=1.0)
+    parser.add_argument("--lr_decay_gamma", type=float, default=1.0)
+    adaptlr_opts = parser.parse_known_args()[0]
+    return adaptlr_opts
 
 
 # different argument parsers for different settings
@@ -124,6 +136,10 @@ if __name__ == "__main__":
         # overwrite with parse values
         config.test.mcts.from_class(mcts_opts)
 
+    if config.test.use_adaptlr:
+        adaptlr_opts = parse_adaptlr_args()
+        config.test.adaptlr = Config(config_class=adaptlr_opts, restrictive=False)
+
     # Init logger
     logger, result_folder_path = get_test_logger(config.test)
 
@@ -147,8 +163,7 @@ if __name__ == "__main__":
         agent = MCTSAgent(nnetwork, config.test.mcts.to_dict(False))
         # agent = MCTSBatchAgent(nnetwork, c_puct=config.test.c_puct, n_playout=config.test.num_playouts, num_parallel=config.test.num_parallel)
     elif config.test.use_adaptlr:
-        # use default parameters for now
-        agent = AdaptivePolicyAgent(nnetwork)
+        agent = AdaptivePolicyAgent(nnetwork, **config.test.adaptlr.to_dict(False))
     else:
         agent = PolicyAgent(nnetwork)
 
