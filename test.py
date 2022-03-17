@@ -139,6 +139,8 @@ if __name__ == "__main__":
     if config.test.use_adaptlr:
         adaptlr_opts = parse_adaptlr_args()
         config.test.adaptlr = Config(config_class=adaptlr_opts, restrictive=False)
+        if config.test.adaptlr.batch_size > config.test.adaptlr.state_space_size:
+            config.test.adaptlr.batch_size = config.test.adaptlr.state_space_size
 
     # Init logger
     logger, result_folder_path = get_test_logger(config.test)
