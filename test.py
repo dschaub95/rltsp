@@ -33,7 +33,7 @@ def parse_adaptlr_args():
     parser.add_argument("--state_space_size", type=int, default=32)
     parser.add_argument("--lr_rate", type=float, default=1e-4)
     parser.add_argument("--weight_decay", type=float, default=1e-6)
-    parser.add_argument("--lr_decay_epoch", type=float, default=1.0)
+    parser.add_argument("--lr_decay_epoch", type=int, default=1)
     parser.add_argument("--lr_decay_gamma", type=float, default=1.0)
     adaptlr_opts = parser.parse_known_args()[0]
     return adaptlr_opts
