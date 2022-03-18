@@ -85,6 +85,7 @@ def parse_args():
     parser.add_argument(
         "--tsp_type", type=str, default="uniform"
     )  # later add clustered
+    parser.add_argument("--num_workers", type=int, default=2)
     # saved test set
     parser.add_argument("--test_set", type=str, default="fu_et_al_n_20_10000")
     parser.add_argument("--test_type", type=str, default="test")
@@ -186,6 +187,7 @@ if __name__ == "__main__":
         use_pomo_aug=config.test.use_pomo_aug,
         test_set_path=config.test.test_set_path,
         test_batch_size=config.test.test_batch_size,
+        num_workers=config.test.num_workers,
     )
     # run test
     test_result = tester.test(agent)

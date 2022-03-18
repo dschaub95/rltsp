@@ -34,6 +34,7 @@ class TSPTester:
         test_set_path=None,
         test_batch_size=1024,
         log_period_sec=5,
+        num_workers=4,
     ) -> None:
         # only relevant when generating test data on the fly
         self.logger = logger
@@ -45,6 +46,7 @@ class TSPTester:
             self.sampling_steps = 8
         self.test_batch_size = test_batch_size
         self.test_set_path = test_set_path
+        self.num_workers = num_workers
         self._prepare_test_set(num_nodes, num_samples)
         # clip number of trajectories
         self.num_trajectories = np.clip(num_trajectories, 1, self.num_nodes)
@@ -62,6 +64,7 @@ class TSPTester:
                 self.test_batch_size,
                 self.use_pomo_aug,
                 self.sampling_steps,
+                self.num_workers,
             )
         else:
             self.data_loader = RandomTSPTestDataLoader(
@@ -172,17 +175,17 @@ class TSPTester:
         # maybe also log action info
         if self.logger is not None:
             wandb.log({"avg_error": self.result.avg_approx_error, "episode": episode})
-            if (time.time() - self.logger.logger_start > self.log_period_sec) or (
-                episode >= self.num_samples
-            ):
-                timestr = self.result.computation_time
-                percent = np.round((episode / self.num_samples) * 100, 1)
-                episode_str = f"{int(episode)}".zfill(len(str(int(self.num_samples))))
-                avg_length = np.round(self.result.avg_length, 7)
-                avg_error = np.round(self.result.avg_approx_error, 7)
-                log_str = f"Ep:{episode_str} ({percent:5}%)  T:{timestr}  avg.dist:{avg_length}  avg.error:{avg_error}%"
-                self.logger.info(log_str)
-                self.logger.logger_start = time.time()
+            # if (time.time() - self.logger.logger_start > self.log_period_sec) or (
+            #     episode >= self.num_samples
+            # ):
+            timestr = self.result.computation_time
+            percent = np.round((episode / self.num_samples) * 100, 1)
+            episode_str = f"{int(episode)}".zfill(len(str(int(self.num_samples))))
+            avg_length = np.round(self.result.avg_length, 7)
+            avg_error = np.round(self.result.avg_approx_error, 7)
+            log_str = f"Ep:{episode_str} ({percent:5}%)  T:{timestr}  avg.dist:{avg_length}  avg.error:{avg_error}%"
+            self.logger.info(log_str)
+            self.logger.logger_start = time.time()
 
     def _log_final(self):
         if self.logger is not None:
