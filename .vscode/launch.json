@@ -5,6 +5,28 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "test.py default",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/test.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--wandb_mode",
+                "disabled",
+                "--test_batch_size",
+                "64",
+                "--use_pomo_aug",
+                "0",
+                "--num_trajectories",
+                "20",
+                "--test_type",
+                "valid",
+                "--test_set",
+                "uniform_n_20_10000"
+            ]
+            // "justMyCode": true
+        },
+        {
             "name": "test.py mcts",
             "type": "python",
             "request": "launch",
@@ -34,8 +56,10 @@
             "args": [
                 "--wandb_mode",
                 "disabled",
+                "--model_path",
+                "./results/saved_models/saved_tsp20_model",
                 "--test_batch_size",
-                "128",
+                "1024",
                 "--use_pomo_aug",
                 "0",
                 "--num_trajectories",
@@ -45,13 +69,13 @@
                 "--state_space_size",
                 "32",
                 "--batch_size",
-                "16",
+                "32",
                 "--num_epochs",
                 "4",
                 "--test_type",
                 "valid",
                 "--test_set",
-                "uniform_n_20_128"
+                "uniform_n_20_10000"
             ]
             // "justMyCode": true
         },
