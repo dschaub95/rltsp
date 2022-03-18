@@ -44,18 +44,28 @@ class ActionBuffer:
                 # compare lengths by extracting lengths based on indices
                 # create dummy tensor to enable selection
                 # needs optimization!
-                dummy_tensor = Tensor(
+                dummy_length_tensor = Tensor(
                     (np.arange(self.best_lengths.size(0)) + 1) * np.inf
                 )
-                dummy_tensor[indices] = lengths
-                full_mask = dummy_tensor < self.best_lengths
-                reduced_mask = lengths < self.best_lengths[indices]
-                self.best_actions[full_mask] = action_tensor[reduced_mask]
-                self.best_lengths[full_mask] = dummy_tensor[full_mask]
+                dummy_length_tensor[indices] = lengths
+
+                dummy_action_tensor = torch.empty(
+                    self.best_actions.size(), dtype=torch.int64, device=device
+                )
+                dummy_action_tensor[indices] = action_tensor
+
+                full_mask = dummy_length_tensor < self.best_lengths
+
+                self.best_actions[full_mask] = dummy_action_tensor[full_mask]
+                self.best_lengths[full_mask] = dummy_length_tensor[full_mask]
+                # old version
+                # reduced_mask = lengths < self.best_lengths[indices]
+                # self.best_actions[full_mask] = action_tensor[reduced_mask]
+
+                # desired version
                 # mask = lengths < self.best_lengths[indices]
                 # self.best_actions[indices][mask] = action_tensor[mask]
                 # self.best_lengths[indices][mask] = lengths[mask]
-                pass
 
     def reset(self):
         self.best_actions = None
@@ -207,7 +217,6 @@ class AdaptivePolicyAgent(PolicyAgent):
             train_loader
         ):
             # should also return indices to restore order of the tsps for tracking best tour during training per instance
-            # should also load
             # calculate node embeddings once --> can be made more efficient by calculating this for an independent batch size
             # node embeddings should only be calculated in the first epoch and then saved
 
@@ -221,11 +230,6 @@ class AdaptivePolicyAgent(PolicyAgent):
             group_state, reward, done = local_env.reset(group_size=group_s)
             # self.model.reset(group_state)
             self.model.soft_reset(encoded_nodes)
-            # First Move is given
-            # first_action = LongTensor(np.arange(group_s))[None, :].expand(
-            #     batch_s, group_s
-            # )
-            # group_state, reward, done = local_env.step(first_action)
 
             group_prob_list = Tensor(np.zeros((batch_s, group_s, 0)))
             while not done:
@@ -286,14 +290,20 @@ class LocalDataset(Dataset):
     # greedy lengths
     # node coords
     # tsp index in batch
-    def __init__(self, data, encoded_nodes, greedy_lengths, indices) -> None:
+    def __init__(
+        self, data, encoded_nodes, greedy_lengths, batch_size, indices=None
+    ) -> None:
         super().__init__()
         self.data = data
+        self.data_size = int(self.data.size(0))
         self.encoded_nodes = encoded_nodes
         self.lengths = greedy_lengths
         self.indices = indices
+        self.batch_s = batch_size
 
     def __getitem__(self, index):
+        # if batch_s is bigger that data size
+        index = index % self.data_size
         if self.indices is not None:
             true_index = self.indices[index]
         else:
@@ -306,7 +316,7 @@ class LocalDataset(Dataset):
         )
 
     def __len__(self):
-        return int(self.data.size(0))
+        return max(self.batch_s, self.data_size)
 
 
 class LocalDataLoader(DataLoader):
@@ -320,7 +330,9 @@ class LocalDataLoader(DataLoader):
         indices=None,
     ):
         super().__init__(
-            dataset=LocalDataset(data, encoded_nodes, greedy_lengths, indices),
+            dataset=LocalDataset(
+                data, encoded_nodes, greedy_lengths, batch_size, indices
+            ),
             batch_size=batch_size,
             shuffle=shuffle,
             collate_fn=local_collate_fn,
