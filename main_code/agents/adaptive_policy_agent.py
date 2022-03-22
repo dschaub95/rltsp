@@ -43,15 +43,6 @@ class ActionBuffer:
             else:
                 # compare lengths by extracting lengths based on indices
                 # desired version
-                # mask = lengths < self.best_lengths[indices]
-                # # self.best_actions[indices][mask] = action_tensor[mask]
-                # tmp_actions = self.best_actions[indices]
-                # tmp_actions[mask] = action_tensor[mask]
-                # self.best_actions[indices] = tmp_actions
-                # # self.best_lengths[indices][mask] = lengths[mask]
-                # tmp_lengths = self.best_lengths[indices]
-                # tmp_lengths[mask] = lengths[mask]
-                # self.best_lengths[indices] = tmp_lengths
                 mask = lengths < self.best_lengths[indices]
                 self.best_actions[indices[mask]] = action_tensor[mask]
                 self.best_lengths[indices[mask]] = lengths[mask]
@@ -159,7 +150,7 @@ class AdaptivePolicyAgent(PolicyAgent):
                 indices=space_indices,
             )
 
-            # self.add_noise_to_decoder(self.noise_factor)
+            self.add_noise_to_decoder(self.noise_factor)
             self.setup_backprop()
 
             # make sure all output tensors have enabled grad for backprop

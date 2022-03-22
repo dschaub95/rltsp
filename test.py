@@ -35,6 +35,7 @@ def parse_adaptlr_args():
     parser.add_argument("--weight_decay", type=float, default=1e-6)
     parser.add_argument("--lr_decay_epoch", type=int, default=1)
     parser.add_argument("--lr_decay_gamma", type=float, default=1.0)
+    parser.add_argument("--noise_factor", type=float, default=0.0)
     adaptlr_opts = parser.parse_known_args()[0]
     return adaptlr_opts
 
