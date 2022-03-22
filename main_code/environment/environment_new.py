@@ -242,11 +242,16 @@ class GroupEnvironment:
         if self.group_state.selected_count == self.tsp_size:
             # make sanity check that each node was selected exactly once
             # throw assertion error if not fullfilled
-            assert (
+            if not (
                 self.group_state.selected_node_list.sum(dim=-1)
                 == (self.tsp_size - 1) * self.tsp_size / 2
-            ).all()
-            return True
+            ).all():
+                sum_tensor = self.group_state.selected_node_list.sum(dim=-1)
+                print(sum_tensor[sum_tensor != 190])
+                print((self.tsp_size - 1) * self.tsp_size / 2)
+                raise AssertionError
+            else:
+                return True
         else:
             return False
 
