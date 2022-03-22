@@ -42,30 +42,19 @@ class ActionBuffer:
                 self.best_lengths[mask] = lengths[mask]
             else:
                 # compare lengths by extracting lengths based on indices
-                # create dummy tensor to enable selection
-                # needs optimization!
-                dummy_length_tensor = Tensor(
-                    (np.arange(self.best_lengths.size(0)) + 1) * np.inf
-                )
-                dummy_length_tensor[indices] = lengths
-
-                dummy_action_tensor = torch.empty(
-                    self.best_actions.size(), dtype=torch.int64, device=device
-                )
-                dummy_action_tensor[indices] = action_tensor
-
-                full_mask = dummy_length_tensor < self.best_lengths
-
-                self.best_actions[full_mask] = dummy_action_tensor[full_mask]
-                self.best_lengths[full_mask] = dummy_length_tensor[full_mask]
-                # old version
-                # reduced_mask = lengths < self.best_lengths[indices]
-                # self.best_actions[full_mask] = action_tensor[reduced_mask]
-
                 # desired version
                 # mask = lengths < self.best_lengths[indices]
-                # self.best_actions[indices][mask] = action_tensor[mask]
-                # self.best_lengths[indices][mask] = lengths[mask]
+                # # self.best_actions[indices][mask] = action_tensor[mask]
+                # tmp_actions = self.best_actions[indices]
+                # tmp_actions[mask] = action_tensor[mask]
+                # self.best_actions[indices] = tmp_actions
+                # # self.best_lengths[indices][mask] = lengths[mask]
+                # tmp_lengths = self.best_lengths[indices]
+                # tmp_lengths[mask] = lengths[mask]
+                # self.best_lengths[indices] = tmp_lengths
+                mask = lengths < self.best_lengths[indices]
+                self.best_actions[indices[mask]] = action_tensor[mask]
+                self.best_lengths[indices[mask]] = lengths[mask]
 
     def reset(self):
         self.best_actions = None
@@ -85,6 +74,7 @@ class AdaptivePolicyAgent(PolicyAgent):
         weight_decay=1e-6,
         lr_decay_epoch=1.0,
         lr_decay_gamma=1.0,
+        noise_factor=0.0,
     ) -> None:
         # extra hyperpramaters for learning as mcts
         # specifically should have parameter defining the batch size for learning and the state space size
@@ -99,6 +89,7 @@ class AdaptivePolicyAgent(PolicyAgent):
         self.lr_rate = lr_rate
         self.lr_decay_epoch = lr_decay_epoch
         self.lr_decay_gamma = lr_decay_gamma
+        self.noise_factor = noise_factor
 
         # maybe reduce this by only considereing best action and duplicating for other trajectories
         self.action_buffer = ActionBuffer()
@@ -112,11 +103,11 @@ class AdaptivePolicyAgent(PolicyAgent):
         # the magic happens here
         self.tsp_size = state.tsp_size
         self.group_s = state.group_s
-        # encode nodes
+        # encode nodes once
         super().reset(state)
         self.encoded_nodes_all = self.model.encoded_nodes
 
-        # first run greedy decoding and save results
+        # run initial greedy decoding and save results in action buffer
         self.action_buffer.reset()
         greedy_lengths = self.solve_greedy(state.data, self.group_s)
 
@@ -148,10 +139,7 @@ class AdaptivePolicyAgent(PolicyAgent):
         return -max_reward
 
     def run_adaptlr(self, state, greedy_lengths, group_s):
-        # at best take a dataloader based on the test dataset with the correct batchsize
-        # otherwise init custom dataloader from a batch of data with the test batch size
-        # (is strongly dependent on the test batch size and thus more complicated)
-        # initalize dataloader based on data
+        # initalize local dataloader based on data
         state_loader = LocalDataLoader(
             state.data,
             self.encoded_nodes_all,
@@ -171,18 +159,17 @@ class AdaptivePolicyAgent(PolicyAgent):
                 indices=space_indices,
             )
 
+            # self.add_noise_to_decoder(self.noise_factor)
             self.setup_backprop()
 
             # make sure all output tensors have enabled grad for backprop
             with torch.enable_grad():
                 for epoch in range(self.num_epochs):
-                    # fine tuning should also return the best action sequence encountered during epoch
+                    # run fine tuning and update action buffer if improved tour was found during training
                     avg_tour_len, actor_loss_result = self.fine_tune_one_epoch(
                         train_loader, group_s
                     )
-
-                    # potentially run greedy decoding after each fine tuning epoch for validation (and also use this )
-                    # compare with greedy len (for tuning on validation set)
+                    # run greedy decoding after each fine tuning epoch
                     test_lengths = self.solve_greedy(
                         space_batch,
                         group_s,
@@ -278,8 +265,13 @@ class AdaptivePolicyAgent(PolicyAgent):
             gamma=self.lr_decay_gamma,
         )
 
+    def add_noise_to_decoder(self, noise_factor=0.1):
+        with torch.no_grad():
+            for param in self.model.node_prob_calculator.parameters():
+                param.add_(torch.randn(param.size(), device=device) * noise_factor)
+
     def get_action(self, state):
-        # return stored action sequence one by one (at best make this somehow depend on state to double check)
+        # return stored action sequence one by one
         action = self.action_buffer.get_action()
         action_info = None
         return action, action_info
