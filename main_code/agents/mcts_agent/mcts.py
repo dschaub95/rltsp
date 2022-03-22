@@ -104,22 +104,11 @@ class MCTS:
                 leaf.add_virtual_loss(self.virtual_loss)
                 leaves.append(leaf)
                 leaf_states.append(leaf_state)
-            # leaf.add_visits(visits=1)
             # when running the first overall selection break after first iteration
             if self.step == 0 and self.cur_playout == 0:
                 break
 
         if leaves:
-            # if self.step < 2:
-            #     print("step:", self.step)
-            #     print("play out number:", self.cur_playout)
-            #     print("leaves states selected nodes:", [leaf.state.selected_node_list for leaf in leaves])
-            #     # print("leaves states data:")
-            #     print("leaves states ninfmasks:", [leaf.state.ninf_mask for leaf in leaves])
-            #     # print("Leaves depths",[leaf.depth for leaf in leaves])
-            # revert_virtual_loss
-            # for leaf in leaves:
-            #     leaf.revert_virtual_loss(self.virtual_loss)
             # Calc priors and values together
             values, priors = self.evaluate_leaves(leaf_states)
             #
@@ -127,12 +116,10 @@ class MCTS:
                 zip(leaves, leaf_states, priors, values)
             ):
                 leaf.revert_virtual_loss(self.virtual_loss)
-                ### update_value
-                # in 1d case convert tensor to float
+                # update_value
                 leaf.update_recursive(value)
-                ### expand node considering all possible actions
+                # expand node considering all possible actions
                 available_actions = leaf_state.available_actions
-                num_ava_actions = available_actions.size(-1)
                 # gather the probabilities for all the available actions
                 # shape (batch_s, group_s, num_ava_actions)
                 prior = torch.gather(ps, dim=-1, index=available_actions)
@@ -161,10 +148,6 @@ class MCTS:
             0 : multi_state.single_batch_s, :, :
         ]
         return values, priors
-        # result = []
-        # for leaf in leaves:
-        #     result.append(self.random_rollout(leaf.state))
-        # return result
 
     def random_rollout(self, state):
         # not used when we have given policy since policy can approximate the value by just taking actions
@@ -220,9 +203,9 @@ class MCTS:
         return values, priors
 
     def get_move_values(self):
+        # get mcts values for all available actions
         # add number of current simulations to n_playout to handle sub tree roots which have already been visited
         self.cur_playout = 0
-        # print(f"Starting playout number {self.cur_playout}")
         while self.cur_playout < self._n_playout:
             self._playout(self.n_parallel)
             self.cur_playout += 1
