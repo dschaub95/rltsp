@@ -24,7 +24,7 @@ class MCTSAgent(BaseAgent):
 
     def reset(self, state: GroupState):
         # init new environment model based on state
-        # handle data batch sequentially for now
+        # handle data batch sequentially
         env = GroupEnvironment(state.data, state.tsp_size)
         # initialize the mcts with the seperate environment model and return the starting state
         state = self.mcts.initialize_search(env, group_size=state.group_s)
@@ -32,15 +32,11 @@ class MCTSAgent(BaseAgent):
         super().reset(state)
 
     def get_action(self, state):
-        # print(self.mcts._net.encoded_nodes)
         acts, values, states, priors, n_visits = self.mcts.get_move_values()
         # select best action based on values
         idx = np.argmax(values)
         # update mcts tree
         self.mcts.update_with_move(acts[idx])
-        # print(values)
-        # if self.mcts.step >= 19:
-        #     print(self.mcts.exploration_rating)
         action_info = {
             "orig_prob_action": priors[idx],
             "values": values,
