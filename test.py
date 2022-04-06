@@ -124,6 +124,12 @@ if __name__ == "__main__":
         config.test.num_samples = int(opts.test_set.split("_")[-1])
         config.test.num_nodes = int(opts.test_set.split("_")[-2])
 
+    # handle arbitrary test batch sizes for various sized inputs
+    if config.test.use_pomo_aug:
+        config.test.test_batch_size = max(8, config.test.test_batch_size)
+    else:
+        config.test.test_batch_size = max(config.test.sampling_steps, config.test.test_batch_size)
+
     # adjust settings for mcts
     if config.test.use_mcts:
         config.test.test_batch_size = (
