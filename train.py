@@ -16,13 +16,18 @@ from main_code.utils.data.data_loader import TSP_DATA_LOADER__RANDOM
 from main_code.utils.logging.logging import Get_Logger
 from main_code.environment.environment import GroupEnvironment
 from main_code.utils.config.config import get_config
-from main_code.testing.tsp_tester import TSPTester
+from main_code.testing.tsp_tester_new import TSPTester
 from main_code.agents.policy_agent import PolicyAgent
 
 from main_code.nets.pomo import PomoNetwork
 
 
 def train(config, save_dir="./logs", save_folder_name="train"):
+    # define wandb metrics
+    wandb.define_metric("epoch")
+    wandb.define_metric("train/*", step_metric="epoch")
+    wandb.define_metric("valid/*", summary="min", step_metric="epoch")
+
     # Make Log File
     logger, result_folder_path = Get_Logger(save_dir, save_folder_name)
     # Objects to Use
@@ -38,7 +43,8 @@ def train(config, save_dir="./logs", save_folder_name="train"):
 
     # GO
     timer_start = time.time()
-    best_valid_avg_len = np.Inf
+    best_valid_avg_len = dict()
+    best_valid_avg_error = dict()
     for epoch in range(1, config.TOTAL_EPOCH + 1):
 
         log_package = {"epoch": epoch, "timer_start": timer_start, "logger": logger}
@@ -49,34 +55,49 @@ def train(config, save_dir="./logs", save_folder_name="train"):
 
         #  EVAL
         #######################################################
-        valid_result = validate_new(config, actor)
-        valid_avg_error = valid_result.avg_approx_error
-        valid_avg_len = valid_result.avg_length
-
-        # track the best validation performance
-        if valid_avg_len < best_valid_avg_len:
-            improvement = True
-            best_valid_avg_len = valid_avg_len
-            best_valid_avg_error = valid_avg_error
-        else:
-            improvement = False
+        improvement = True
+        sizes, valid_results = validate(config, actor)
         log_data = {
+            "epoch": epoch,
             "train/avg_length": train_avg_len,
             "train/actor_loss": actor_loss,
-            "valid/avg_length": valid_avg_len,
-            "valid/avg_error": valid_avg_error,
-            "valid/best_avg_length": best_valid_avg_len,
-            "valid/best_avg_error": best_valid_avg_error,
         }
+        log_strings = []
+        for size, valid_result in zip(sizes, valid_results):
+            # in training distribution validation
+            valid_avg_error = valid_result.avg_approx_error
+            valid_avg_len = valid_result.avg_length
+            # out of training distribution validation
+
+            # track the best validation performance
+            # only save checkpoint if performance on all validation sets increased
+            if epoch == 1:
+                best_valid_avg_len[size] = valid_avg_len
+                best_valid_avg_error[size] = valid_avg_error
+            elif valid_avg_len < best_valid_avg_len[size]:
+                best_valid_avg_len[size] = valid_avg_len
+                best_valid_avg_error[size] = valid_avg_error
+            else:
+                improvement = False
+            valid_logs = {
+                f"valid/avg_length_{size}": valid_avg_len,
+                f"valid/avg_error_{size}": valid_avg_error,
+                f"valid/best_avg_length_{size}": best_valid_avg_len[size],
+                f"valid/best_avg_error_{size}": best_valid_avg_error[size],
+            }
+            log_data.update(valid_logs)
+            # update string for graphical logging
+            log_str = "  <<< EVAL after Epoch:{:03d} for size {} >>>   Avg.dist:{:5f}  Avg.error:{:5f}%".format(
+                epoch, size, valid_avg_len, valid_avg_error
+            )
+            log_strings.append(log_str)
         wandb.log(log_data)
         fill_str = (
             "--------------------------------------------------------------------------"
         )
         logger.info(fill_str)
-        log_str = "  <<< EVAL after Epoch:{:03d} >>>   Avg.dist:{:5f}  Avg.error:{:5f}%".format(
-            epoch, valid_avg_len, valid_avg_error
-        )
-        logger.info(log_str)
+        for log_str in log_strings:
+            logger.info(log_str)
         logger.info(fill_str)
         # only save checkpoint if the performance has improved --> the last checkpoint is always the best
         if improvement:
@@ -110,7 +131,6 @@ def train_one_epoch(config, actor_group, epoch, timer_start, logger):
         batch_size=config.TRAIN_BATCH_SIZE,
     )
 
-    logger_start = time.time()
     episode = 0
     for data in train_loader:
         # data.shape = (batch_s, TSP_SIZE, 2)
@@ -204,21 +224,32 @@ def train_one_epoch(config, actor_group, epoch, timer_start, logger):
     return avg_tour_len, actor_loss_result
 
 
-def validate_new(config, actor_group):
+def validate(config, actor_group):
     agent = PolicyAgent(actor_group)
-    num_samples = int(config.valid_path.split("_")[-1])
-    tester = TSPTester(
-        num_trajectories=config.TSP_SIZE,
-        num_nodes=config.TSP_SIZE,
-        num_samples=num_samples,
-        sampling_steps=1,
-        use_pomo_aug=False,
-        test_set_path=config.valid_path,
-        test_batch_size=config.TEST_BATCH_SIZE,
-    )
-    # run test
-    test_result = tester.test(agent)
-    return test_result
+    valid_results = []
+    sizes = []
+    for valid_path in config.valid_paths:
+        num_samples = int(valid_path.split("_")[-1])
+        num_nodes = int(valid_path.split("_")[-2])
+        # iterate over all given valid paths
+        tester = TSPTester(
+            num_trajectories=num_nodes,
+            num_nodes=num_nodes,
+            num_samples=num_samples,
+            sampling_steps=1,
+            use_pomo_aug=False,
+            test_set_path=valid_path,
+            test_batch_size=config.TEST_BATCH_SIZE,
+        )
+        # run test
+        test_result = tester.test(agent)
+        sizes.append(num_nodes)
+        valid_results.append(test_result)
+    return sizes, valid_results
+
+
+def log_results():
+    pass
 
 
 if __name__ == "__main__":
