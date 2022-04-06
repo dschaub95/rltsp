@@ -92,9 +92,8 @@ class TSPTester:
             )
             self.logger.info(f"Number of sampling steps: {self.sampling_steps}")
             self.logger.info(f"Using POMO augmentation: {self.use_pomo_aug}")
-
+            self.logger.logger_start = time.time()
         timer_start = time.time()
-        self.logger.logger_start = time.time()
         episode = 0
         for batch_idx, (node_batch, opt_lens) in enumerate(self.data_loader):
             # print(opt_lens)
