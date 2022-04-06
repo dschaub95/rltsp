@@ -7,7 +7,8 @@
     "TEST_DATASET_SIZE": 1e+4,
     "TRAIN_BATCH_SIZE": 64,
     "TEST_BATCH_SIZE": 1024,
-  
+
+    "embed_graph": true,
     "EMBEDDING_DIM": 128,
     "KEY_DIM": 16,
     "HEAD_NUM": 8,

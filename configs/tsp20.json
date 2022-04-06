@@ -8,7 +8,8 @@
     "TRAIN_BATCH_SIZE": 64,
     "TEST_BATCH_SIZE": 1024,
     "valid_path": "./data/valid_sets/uniform_n_20_10000",
-  
+
+    "embed_graph": true,
     "EMBEDDING_DIM": 128,
     "KEY_DIM": 16,
     "HEAD_NUM": 8,
