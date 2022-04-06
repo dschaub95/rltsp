@@ -25,7 +25,7 @@ def get_table_data_from_url(source_url: str, api_key: Optional[str] = None) -> N
     return table_df
 
 
-def get_data_for_run(run, download_tours=True, download_metrics=True):
+def get_data_for_run(run, download_tours=False, download_metrics=False, limit=10000):
     summary = run.summary._json_dict
     config = {k: v for k, v in run.config.items() if not k.startswith("_")}
     name = run.name
@@ -39,10 +39,15 @@ def get_data_for_run(run, download_tours=True, download_metrics=True):
         metrics_df = get_table_data_from_url(metrics_file.url, wandb.Api().api_key)
     else:
         metrics_df = pd.DataFrame()
+    history_df = pd.DataFrame()
+    for point in run.scan_history(page_size=limit):
+        df_tmp = pd.DataFrame(point, index=[0])
+        history_df = pd.concat([history_df, df_tmp], ignore_index=True)
     data_dict = {
         "name": name,
         "config": config,
         "summary": summary,
+        "history": history_df,
         "tour_data": tour_df,
         "run_metrics": metrics_df,
     }
