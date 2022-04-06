@@ -15,10 +15,16 @@ class MHADecoder(nn.Module):
         self.KEY_DIM = config.KEY_DIM
         self.EMBEDDING_DIM = config.EMBEDDING_DIM
         self.LOGIT_CLIPPING = config.LOGIT_CLIPPING
+        # TODO needs refactoring
+        try:
+            self.embed_graph = config.embed_graph
+        except:
+            self.embed_graph = True
 
-        self.Wq_graph = nn.Linear(
-            self.EMBEDDING_DIM, self.HEAD_NUM * self.KEY_DIM, bias=False
-        )
+        if self.embed_graph:
+            self.Wq_graph = nn.Linear(
+                self.EMBEDDING_DIM, self.HEAD_NUM * self.KEY_DIM, bias=False
+            )
         self.Wq_first = nn.Linear(
             self.EMBEDDING_DIM, self.HEAD_NUM * self.KEY_DIM, bias=False
         )
@@ -49,9 +55,10 @@ class MHADecoder(nn.Module):
 
         encoded_graph = encoded_nodes.mean(dim=1, keepdim=True)
         # shape = (batch_s, 1, EMBEDDING_DIM)
-        self.q_graph = reshape_by_heads(
-            self.Wq_graph(encoded_graph), head_num=self.HEAD_NUM
-        )
+        if self.embed_graph:
+            self.q_graph = reshape_by_heads(
+                self.Wq_graph(encoded_graph), head_num=self.HEAD_NUM
+            )
         # shape = (batch_s, HEAD_NUM, 1, KEY_DIM)
         self.q_first = None
         # shape = (batch_s, HEAD_NUM, group, KEY_DIM)
@@ -78,8 +85,10 @@ class MHADecoder(nn.Module):
             self.Wq_last(encoded_last_node), head_num=self.HEAD_NUM
         )
         # shape = (batch_s, HEAD_NUM, group, KEY_DIM)
-
-        q = self.q_graph + self.q_first + q_last
+        if self.embed_graph:
+            q = self.q_graph + self.q_first + q_last
+        else:
+            q = self.q_first + q_last
         # shape = (batch_s, HEAD_NUM, group, KEY_DIM)
 
         out_concat = multi_head_attention(
