@@ -34,6 +34,7 @@ class TSPTester:
         test_set_path=None,
         test_batch_size=1024,
         log_period_sec=5,
+        num_workers=4,
     ) -> None:
         # only relevant when generating test data on the fly
         self.logger = logger
@@ -45,6 +46,7 @@ class TSPTester:
             self.sampling_steps = 8
         self.test_batch_size = test_batch_size
         self.test_set_path = test_set_path
+        self.num_workers = num_workers
         self._prepare_test_set(num_nodes, num_samples)
         # clip number of trajectories
         self.num_trajectories = np.clip(num_trajectories, 1, self.num_nodes)
@@ -52,6 +54,8 @@ class TSPTester:
         # implement later
         # self.env = GroupEnvironment()
         self.result = TSPTestResult()
+        wandb.define_metric("episode")
+        wandb.define_metric("avg_error", step_metric="episode")
 
     def _prepare_test_set(self, num_nodes, num_samples):
         if self.test_set_path is not None:
@@ -60,6 +64,7 @@ class TSPTester:
                 self.test_batch_size,
                 self.use_pomo_aug,
                 self.sampling_steps,
+                self.num_workers,
             )
         else:
             self.data_loader = RandomTSPTestDataLoader(
@@ -76,7 +81,6 @@ class TSPTester:
     def test(self, agent):
         self.result = TSPTestResult()
         agent.eval()
-
         # init this every time
         eval_dist_AM_0 = AverageMeter()
         if self.logger is not None:
@@ -88,11 +92,10 @@ class TSPTester:
             )
             self.logger.info(f"Number of sampling steps: {self.sampling_steps}")
             self.logger.info(f"Using POMO augmentation: {self.use_pomo_aug}")
-
+            self.logger.logger_start = time.time()
         timer_start = time.time()
-        logger_start = time.time()
         episode = 0
-        for node_batch, opt_lens in self.data_loader:
+        for batch_idx, (node_batch, opt_lens) in enumerate(self.data_loader):
             # print(opt_lens)
             batch = Tensor(node_batch)
             batch_s = batch.size(0)
@@ -104,79 +107,86 @@ class TSPTester:
                 group_state, reward, done = env.reset(group_size=group_s)
                 # do the encoding only once
                 agent.reset(group_state)
-
                 while not done:
                     action, action_info = agent.get_action(group_state)
                     # shape = (batch, group)
                     group_state, reward, done = env.step(action)
+            self._aggregate_results(
+                reward, opt_lens, group_state, eval_dist_AM_0, timer_start
+            )
+            # do the intermediate logging
+            # maybe also log action info
+            self._log_intermediate(episode)
+        self._log_final()
+        return self.result
 
-            tours = group_state.selected_node_list
+    def _aggregate_results(
+        self, reward, opt_lens, group_state, eval_dist_AM_0, timer_start
+    ):
+        tours = group_state.selected_node_list
+        # handle augmentation
+        if self.use_pomo_aug or self.sampling_steps > 1:
+            # reshape result reduce to most promising trajectories for each sampled graph
+            # in case of sampling the final solution must be calculated as the true best solution with respect to the original problem (use group state)
+            reward_sampling = get_group_travel_distances_sampling(
+                tours, group_state.data, self.sampling_steps
+            )
+            # print(torch.allclose(reward_sampling, reward))
+            reward_sampling = torch.reshape(
+                reward_sampling, (-1, self.sampling_steps, self.num_trajectories)
+            )
+            reward, max_sample_indices = reward_sampling.max(dim=1)
+            # reduce tours based on sampling steps
+            tours = tours.reshape(
+                (-1, self.sampling_steps, self.num_trajectories, self.num_nodes)
+            )
+            indices = max_sample_indices[:, None, :, None].expand(
+                (-1, 1, -1, self.num_nodes)
+            )
+            tours = tours.gather(dim=1, index=indices).squeeze(dim=1)
 
-            # handle augmentation
-            if self.use_pomo_aug or self.sampling_steps > 1:
-                # reshape result reduce to most promising trajectories for each sampled graph
-                # in case of sampling the final solution must be calculated as the true best solution with respect to the original problem (use group state)
-                reward_sampling = get_group_travel_distances_sampling(
-                    env.group_state.selected_node_list, batch, self.sampling_steps
-                )
-                # print(torch.allclose(reward_sampling, reward))
-                reward_sampling = torch.reshape(
-                    reward_sampling, (-1, self.sampling_steps, self.num_trajectories)
-                )
-                reward, max_sample_indices = reward_sampling.max(dim=1)
-                # reduce tours based on sampling steps
-                tours = tours.reshape(
-                    (-1, self.sampling_steps, self.num_trajectories, self.num_nodes)
-                )
-                indices = max_sample_indices[:, None, :, None].expand(
-                    (-1, 1, -1, self.num_nodes)
-                )
-                tours = tours.gather(dim=1, index=indices).squeeze(dim=1)
+        # max over trajectories
+        max_reward, max_traj_indices = reward.max(dim=-1)
+        eval_dist_AM_0.push(-max_reward)  # reward was given as negative dist
 
-            # max over trajectories
-            max_reward, max_traj_indices = reward.max(dim=-1)
-            eval_dist_AM_0.push(-max_reward)  # reward was given as negative dist
+        # make final tour selection based on trajectories
+        indices = max_traj_indices[:, None, None].expand(-1, 1, self.num_nodes)
+        final_tours = tours.gather(dim=1, index=indices).squeeze(dim=1)
 
-            # make final tour selection based on trajectories
-            indices = max_traj_indices[:, None, None].expand(-1, 1, self.num_nodes)
-            final_tours = tours.gather(dim=1, index=indices).squeeze(dim=1)
+        # in case of sampling only select the optimal lengths for the max values
+        opt_lens = opt_lens.reshape(-1, self.sampling_steps)[:, 0]
 
-            # in case of sampling only select the optimal lengths for the max values
-            opt_lens = opt_lens.reshape(-1, self.sampling_steps)[:, 0]
+        # save all data into result object
+        self.result.pred_lengths.extend((-max_reward).tolist())
+        self.result.opt_lengths.extend(opt_lens.tolist())
+        self.result.approx_errors = (
+            (np.array(self.result.pred_lengths) / np.array(self.result.opt_lengths) - 1)
+            * 100
+        ).tolist()
+        self.result.avg_approx_error = np.mean(self.result.approx_errors)
+        self.result.avg_length = eval_dist_AM_0.peek()
+        self.result.tours.extend(final_tours.tolist())
+        self.result.computation_time = time.strftime(
+            "%H:%M:%S", time.gmtime(time.time() - timer_start)
+        )
 
-            # save all data into result object
-            self.result.pred_lengths.extend((-max_reward).tolist())
-            self.result.opt_lengths.extend(opt_lens.tolist())
-            self.result.approx_errors = (
-                (
-                    np.array(self.result.pred_lengths)
-                    / np.array(self.result.opt_lengths)
-                    - 1
-                )
-                * 100
-            ).tolist()
-            self.result.avg_approx_error = np.mean(self.result.approx_errors)
-            self.result.avg_length = eval_dist_AM_0.peek()
-            self.result.tours.extend(final_tours.tolist())
-            # do the logging
-            if self.logger is not None:
-                # maybe also log action info
-                wandb.log({"avg_error": self.result.avg_approx_error})
-                if (time.time() - logger_start > self.log_period_sec) or (
-                    episode >= self.num_samples
-                ):
-                    timestr = time.strftime(
-                        "%H:%M:%S", time.gmtime(time.time() - timer_start)
-                    )
-                    percent = np.round((episode / self.num_samples) * 100, 1)
-                    episode_str = f"{int(episode)}".zfill(
-                        len(str(int(self.num_samples)))
-                    )
-                    avg_length = np.round(self.result.avg_length, 7)
-                    avg_error = np.round(self.result.avg_approx_error, 7)
-                    log_str = f"Ep:{episode_str} ({percent:5}%)  T:{timestr}  avg.dist:{avg_length}  avg.error:{avg_error}%"
-                    self.logger.info(log_str)
-                    logger_start = time.time()
+    def _log_intermediate(self, episode):
+        # maybe also log action info
+        if self.logger is not None:
+            wandb.log({"avg_error": self.result.avg_approx_error, "episode": episode})
+            # if (time.time() - self.logger.logger_start > self.log_period_sec) or (
+            #     episode >= self.num_samples
+            # ):
+            timestr = self.result.computation_time
+            percent = np.round((episode / self.num_samples) * 100, 1)
+            episode_str = f"{int(episode)}".zfill(len(str(int(self.num_samples))))
+            avg_length = np.round(self.result.avg_length, 7)
+            avg_error = np.round(self.result.avg_approx_error, 7)
+            log_str = f"Ep:{episode_str} ({percent:5}%)  T:{timestr}  avg.dist:{avg_length}  avg.error:{avg_error}%"
+            self.logger.info(log_str)
+            self.logger.logger_start = time.time()
+
+    def _log_final(self):
         if self.logger is not None:
             log_data = {
                 "sample_id": np.arange(len(self.result.approx_errors)),
@@ -191,9 +201,6 @@ class TSPTester:
             }
             tour_tbl = wandb.Table(data=pd.DataFrame(tour_data))
             wandb.log({"tours": tour_tbl})
-            # add some more infos to the result object
-            self.result.computation_time = timestr
-        return self.result
 
     def save_results(self, file_path):
         # save results as dataframe with instance id, distance, (approx ratio) and computation time

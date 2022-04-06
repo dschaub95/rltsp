@@ -8,16 +8,12 @@ from main_code.nets.pomo import PomoNetwork
 from main_code.agents.policy_agent import PolicyAgent
 from main_code.agents.mcts_agent.mcts_agent import MCTSAgent, MCTSBatchAgent
 
-# from main_code.agents.adaptive_policy_agent_old import AdaptivePolicyAgent
-
 from main_code.agents.adaptive_policy_agent import AdaptivePolicyAgent
 from main_code.agents.mcts_agent.mcts import MCTS
 from main_code.utils.logging.logging import get_test_logger
 from main_code.utils.config.config import Config
 
-# from main_code.testing.tsp_tester import TSPTester
-
-from main_code.testing.tsp_tester_new import TSPTester
+from main_code.testing.tsp_tester import TSPTester
 
 
 def main():
@@ -128,7 +124,9 @@ if __name__ == "__main__":
     if config.test.use_pomo_aug:
         config.test.test_batch_size = max(8, config.test.test_batch_size)
     else:
-        config.test.test_batch_size = max(config.test.sampling_steps, config.test.test_batch_size)
+        config.test.test_batch_size = max(
+            config.test.sampling_steps, config.test.test_batch_size
+        )
 
     # adjust settings for mcts
     if config.test.use_mcts:
