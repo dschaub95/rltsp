@@ -21,7 +21,7 @@ class TSP_plotter:
         save_path=None,
         node_values=None,
         only_draw_relevant_edges=False,
-        dpi=200,
+        dpi=80,
         show=True,
     ):
         plt.style.use("seaborn-paper")
@@ -109,7 +109,7 @@ class TSP_plotter:
         else:
             if edge_probs is not None:
                 # edge_list = np.transpose(np.array(np.where(np.triu(edge_probs) > 0)))
-                # edge_list = np.transpose(np.asarray(np.triu(edge_probs) > 0).nonzero())
+                edge_list = np.transpose(np.asarray(np.triu(edge_probs) > 0).nonzero())
                 probabilties = [edge_probs[edge[0], edge[1]] for edge in edge_list]
                 edge_colors = (np.array(probabilties) + 0.05) * 50
                 edge_alphas = [0.1 if prob == 0.0 else 0.5 for prob in probabilties]
@@ -118,7 +118,7 @@ class TSP_plotter:
                     pos,
                     edgelist=edge_list,
                     ax=ax,
-                    edge_color=edge_colors,
+                    edge_color="g",
                     width=1,
                     alpha=0.2,
                     edge_cmap=cmap,
