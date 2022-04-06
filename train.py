@@ -16,13 +16,13 @@ from main_code.utils.data.data_loader import TSP_DATA_LOADER__RANDOM
 from main_code.utils.logging.logging import Get_Logger
 from main_code.environment.environment import GroupEnvironment
 from main_code.utils.config.config import get_config
-from main_code.testing.tsp_tester_new import TSPTester
+from main_code.testing.tsp_tester import TSPTester
 from main_code.agents.policy_agent import PolicyAgent
 
 from main_code.nets.pomo import PomoNetwork
 
 
-def train(config, save_dir="./logs", save_folder_name="train"):
+def train(config, save_dir="./logs", save_folder_name="train", num_workers=2):
     # define wandb metrics
     wandb.define_metric("epoch")
     wandb.define_metric("train/*", step_metric="epoch")
@@ -56,7 +56,7 @@ def train(config, save_dir="./logs", save_folder_name="train"):
         #  EVAL
         #######################################################
         improvement = True
-        sizes, valid_results = validate(config, actor)
+        sizes, valid_results = validate(config, actor, num_workers)
         log_data = {
             "epoch": epoch,
             "train/avg_length": train_avg_len,
@@ -224,7 +224,7 @@ def train_one_epoch(config, actor_group, epoch, timer_start, logger):
     return avg_tour_len, actor_loss_result
 
 
-def validate(config, actor_group):
+def validate(config, actor_group, num_workers=2):
     agent = PolicyAgent(actor_group)
     valid_results = []
     sizes = []
@@ -240,6 +240,7 @@ def validate(config, actor_group):
             use_pomo_aug=False,
             test_set_path=valid_path,
             test_batch_size=config.TEST_BATCH_SIZE,
+            num_workers=num_workers,
         )
         # run test
         test_result = tester.test(agent)
@@ -255,6 +256,7 @@ def log_results():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config_path", type=str, default="./configs/tsp20.json")
+    parser.add_argument("--num_workers", type=int, default=2)
     parser.add_argument("--save_dir", type=str, default="./results/train")
     parser.add_argument("--save_folder_name", type=str, default="train")
     parser.add_argument("--wandb_mode", type=str, default="disabled")
@@ -279,4 +281,9 @@ if __name__ == "__main__":
         job_type="training",
     )
     config = wandb.config
-    train(config, save_dir=opts.save_dir, save_folder_name=opts.save_folder_name)
+    train(
+        config,
+        save_dir=opts.save_dir,
+        save_folder_name=opts.save_folder_name,
+        num_workers=opts.num_workers,
+    )
