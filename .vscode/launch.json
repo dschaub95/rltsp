@@ -14,15 +14,16 @@
                 "--wandb_mode",
                 "disabled",
                 "--test_batch_size",
-                "64",
+                "1024",
                 "--use_pomo_aug",
                 "0",
                 "--num_trajectories",
                 "20",
                 "--test_type",
-                "valid",
+                "test",
                 "--test_set",
-                "uniform_n_20_10000"
+                // "uniform_n_20_10000"
+                "fu_et_al_n_20_10000"
             ]
             // "justMyCode": true
         },
@@ -58,24 +59,46 @@
                 "disabled",
                 "--model_path",
                 "./results/saved_models/saved_tsp20_model",
+                // "./results/saved_models/saved_tsp100_model",
                 "--test_batch_size",
                 "1024",
                 "--use_pomo_aug",
                 "0",
                 "--num_trajectories",
-                "20",
+                "50",
+                // "100",
                 "--use_adaptlr",
                 "1",
                 "--state_space_size",
-                "32",
+                "64",
                 "--batch_size",
+                // "32",
                 "32",
                 "--num_epochs",
-                "4",
+                "5",
+                // "20",
+                "--lr_rate",
+                // "0.02",
+                "0.005329528481599053",
+                "--lr_decay_gamma",
+                // "0.5",
+                "0.6874551164940635",
+                "--weight_decay",
+                // "0.05",
+                "0.05930316010014507",
+                "--lr_decay_epoch",
+                "1",
+                // "4",
+                "--noise_factor",
+                "0.01103628273945343",
+                // "0.0",
                 "--test_type",
+                // "test",
                 "valid",
                 "--test_set",
-                "uniform_n_20_10000"
+                // "fu_et_al_n_20_10000",
+                "uniform_n_50_10000",
+                // "uniform_n_100_10000",
             ]
             // "justMyCode": true
         },
@@ -106,6 +129,20 @@
                 "valid",
                 "--test_set",
                 "uniform_n_20_128"
+            ]
+            // "justMyCode": true
+        },
+        {
+            "name": "train.py default",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/train.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--wandb_mode",
+                "online",
+                "--config_path",
+                "./configs/tsp20_new.json"
             ]
             // "justMyCode": true
         }
