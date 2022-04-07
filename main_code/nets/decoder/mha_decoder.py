@@ -11,10 +11,10 @@ from main_code.nets.utils.multi_head_attention import (
 class MHADecoder(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.HEAD_NUM = config.HEAD_NUM
-        self.KEY_DIM = config.KEY_DIM
-        self.EMBEDDING_DIM = config.EMBEDDING_DIM
-        self.LOGIT_CLIPPING = config.LOGIT_CLIPPING
+        self.head_num = config.HEAD_NUM
+        self.key_dim = config.KEY_DIM
+        self.embedding_dim = config.EMBEDDING_DIM
+        self.logit_clipping = config.LOGIT_CLIPPING
         # TODO needs refactoring
         try:
             self.embed_graph = config.embed_graph
@@ -23,23 +23,23 @@ class MHADecoder(nn.Module):
 
         if self.embed_graph:
             self.Wq_graph = nn.Linear(
-                self.EMBEDDING_DIM, self.HEAD_NUM * self.KEY_DIM, bias=False
+                self.embedding_dim, self.head_num * self.key_dim, bias=False
             )
         self.Wq_first = nn.Linear(
-            self.EMBEDDING_DIM, self.HEAD_NUM * self.KEY_DIM, bias=False
+            self.embedding_dim, self.head_num * self.key_dim, bias=False
         )
         self.Wq_last = nn.Linear(
-            self.EMBEDDING_DIM, self.HEAD_NUM * self.KEY_DIM, bias=False
+            self.embedding_dim, self.head_num * self.key_dim, bias=False
         )
         self.Wk = nn.Linear(
-            self.EMBEDDING_DIM, self.HEAD_NUM * self.KEY_DIM, bias=False
+            self.embedding_dim, self.head_num * self.key_dim, bias=False
         )
         self.Wv = nn.Linear(
-            self.EMBEDDING_DIM, self.HEAD_NUM * self.KEY_DIM, bias=False
+            self.embedding_dim, self.head_num * self.key_dim, bias=False
         )
 
         self.multi_head_combine = nn.Linear(
-            self.HEAD_NUM * self.KEY_DIM, self.EMBEDDING_DIM
+            self.head_num * self.key_dim, self.embedding_dim
         )
 
         self.q_graph = None  # saved q1, for multi-head attention
@@ -51,63 +51,63 @@ class MHADecoder(nn.Module):
 
     def reset(self, encoded_nodes, group_ninf_mask=None):
         # this function saves some time by making some operations only once after a new graph was encoded
-        # encoded_nodes.shape = (batch_s, TSP_SIZE, EMBEDDING_DIM)
+        # encoded_nodes.shape = (batch_s, TSP_SIZE, embedding_dim)
 
         encoded_graph = encoded_nodes.mean(dim=1, keepdim=True)
-        # shape = (batch_s, 1, EMBEDDING_DIM)
+        # shape = (batch_s, 1, embedding_dim)
         if self.embed_graph:
             self.q_graph = reshape_by_heads(
-                self.Wq_graph(encoded_graph), head_num=self.HEAD_NUM
+                self.Wq_graph(encoded_graph), head_num=self.head_num
             )
-        # shape = (batch_s, HEAD_NUM, 1, KEY_DIM)
+        # shape = (batch_s, head_num, 1, key_dim)
         self.q_first = None
-        # shape = (batch_s, HEAD_NUM, group, KEY_DIM)
-        self.k = reshape_by_heads(self.Wk(encoded_nodes), head_num=self.HEAD_NUM)
-        self.v = reshape_by_heads(self.Wv(encoded_nodes), head_num=self.HEAD_NUM)
-        # shape = (batch_s, HEAD_NUM, TSP_SIZE, KEY_DIM)
+        # shape = (batch_s, head_num, group, key_dim)
+        self.k = reshape_by_heads(self.Wk(encoded_nodes), head_num=self.head_num)
+        self.v = reshape_by_heads(self.Wv(encoded_nodes), head_num=self.head_num)
+        # shape = (batch_s, head_num, TSP_SIZE, key_dim)
         self.single_head_key = encoded_nodes.transpose(1, 2)
-        # shape = (batch_s, EMBEDDING_DIM, TSP_SIZE)
+        # shape = (batch_s, embedding_dim, TSP_SIZE)
         self.group_ninf_mask = group_ninf_mask
         # shape = (batch_s, group, TSP_SIZE)
 
     def forward(self, encoded_first_node, encoded_last_node, group_ninf_mask):
-        # encoded_last_node.shape = (batch_s, group, EMBEDDING_DIM)
+        # encoded_last_node.shape = (batch_s, group, embedding_dim)
 
         if self.q_first is None:
             self.q_first = reshape_by_heads(
-                self.Wq_first(encoded_first_node), head_num=self.HEAD_NUM
+                self.Wq_first(encoded_first_node), head_num=self.head_num
             )
-        # shape = (batch_s, HEAD_NUM, group, KEY_DIM)
+        # shape = (batch_s, head_num, group, key_dim)
 
         #  Multi-Head Attention
         #######################################################
         q_last = reshape_by_heads(
-            self.Wq_last(encoded_last_node), head_num=self.HEAD_NUM
+            self.Wq_last(encoded_last_node), head_num=self.head_num
         )
-        # shape = (batch_s, HEAD_NUM, group, KEY_DIM)
+        # shape = (batch_s, head_num, group, key_dim)
         if self.embed_graph:
             q = self.q_graph + self.q_first + q_last
         else:
             q = self.q_first + q_last
-        # shape = (batch_s, HEAD_NUM, group, KEY_DIM)
+        # shape = (batch_s, head_num, group, key_dim)
 
         out_concat = multi_head_attention(
             q, self.k, self.v, group_ninf_mask=group_ninf_mask
         )
-        # shape = (batch_s, group, HEAD_NUM*KEY_DIM)
+        # shape = (batch_s, group, head_num*key_dim)
 
         mh_atten_out = self.multi_head_combine(out_concat)
-        # shape = (batch_s, group, EMBEDDING_DIM)
+        # shape = (batch_s, group, embedding_dim)
 
         #  Single-Head Attention, for probability calculation
         #######################################################
         score = torch.matmul(mh_atten_out, self.single_head_key)
         # shape = (batch_s, group, TSP_SIZE)
 
-        score_scaled = score / np.sqrt(self.EMBEDDING_DIM)
+        score_scaled = score / np.sqrt(self.embedding_dim)
         # shape = (batch_s, group, TSP_SIZE)
 
-        score_clipped = self.LOGIT_CLIPPING * torch.tanh(score_scaled)
+        score_clipped = self.logit_clipping * torch.tanh(score_scaled)
 
         score_masked = score_clipped + group_ninf_mask.clone()
 
