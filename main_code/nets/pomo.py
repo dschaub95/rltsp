@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from main_code.nets.encoder.gat_encoder import Encoder
+from main_code.nets.encoder.gat_encoder import GraphAttentionEncoder
 from main_code.nets.decoder.mha_decoder import MHADecoder
 
 
@@ -14,7 +14,7 @@ class PomoNetwork(nn.Module):
         # relevant hyperparameters
         self.EMBEDDING_DIM = config.EMBEDDING_DIM
 
-        self.encoder = Encoder(config)
+        self.encoder = GraphAttentionEncoder(config)
         self.node_prob_calculator = MHADecoder(config)
 
         self.batch_s = None
@@ -35,10 +35,10 @@ class PomoNetwork(nn.Module):
     def get_action_probabilities(self, group_state):
         encoded_nodes = self.encoded_nodes
 
-        encoded_last_nodes = pick_nodes_for_each_group(
+        encoded_last_nodes = self.pick_nodes_for_each_group(
             encoded_nodes, group_state.current_node, self.EMBEDDING_DIM
         )
-        encoded_first_nodes = pick_nodes_for_each_group(
+        encoded_first_nodes = self.pick_nodes_for_each_group(
             encoded_nodes, group_state.selected_node_list[:, :, 0], self.EMBEDDING_DIM
         )
         # shape = (batch_s, group, EMBEDDING_DIM)
@@ -50,21 +50,18 @@ class PomoNetwork(nn.Module):
         self.box_select_probabilities = probs
         return self.box_select_probabilities
 
-    def unfreeze_decoder(self, value=True):
-        for param in self.node_prob_calculator.parameters():
-            param.requires_grad = value
+    def pick_nodes_for_each_group(self, encoded_nodes, node_index_to_pick, embed_dim):
+        # encoded_nodes.shape = (batch_s, TSP_SIZE, EMBEDDING_DIM)
+        # node_index_to_pick.shape = (batch_s, group_s)
+        batch_s = node_index_to_pick.size(0)
+        group_s = node_index_to_pick.size(1)
 
+        gathering_index = node_index_to_pick[:, :, None].expand(
+            batch_s, group_s, embed_dim
+        )
+        # shape = (batch_s, group, EMBEDDING_DIM)
 
-def pick_nodes_for_each_group(encoded_nodes, node_index_to_pick, embed_dim):
-    # encoded_nodes.shape = (batch_s, TSP_SIZE, EMBEDDING_DIM)
-    # node_index_to_pick.shape = (batch_s, group_s)
-    batch_s = node_index_to_pick.size(0)
-    group_s = node_index_to_pick.size(1)
+        picked_nodes = encoded_nodes.gather(dim=1, index=gathering_index)
+        # shape = (batch_s, group, EMBEDDING_DIM)
 
-    gathering_index = node_index_to_pick[:, :, None].expand(batch_s, group_s, embed_dim)
-    # shape = (batch_s, group, EMBEDDING_DIM)
-
-    picked_nodes = encoded_nodes.gather(dim=1, index=gathering_index)
-    # shape = (batch_s, group, EMBEDDING_DIM)
-
-    return picked_nodes
+        return picked_nodes
