@@ -18,11 +18,26 @@ from main_code.environment.environment import GroupEnvironment
 from main_code.utils.config.config import get_config
 from main_code.testing.tsp_tester import TSPTester
 from main_code.agents.policy_agent import PolicyAgent
-
+from main_code.training.curriculum_scheduler import (
+    CurriculumScheduler,
+    StochasticCurriculumScheduler,
+)
 from main_code.nets.pomo import PomoNetwork
 
 
-def train(config, save_dir="./logs", save_folder_name="train", num_workers=2):
+def train(
+    config,
+    invariance_weight=0.0,
+    use_curriculum_lr=False,
+    curriculum_stochastic=0,
+    curriculum_start=10,
+    curriculum_step_epoch=1,
+    curriculum_step_size=1,
+    curriculum_stddev=1.0,
+    save_dir="./logs",
+    save_folder_name="train",
+    num_workers=2,
+):
     # define wandb metrics
     wandb.define_metric("epoch")
     wandb.define_metric("train/*", step_metric="epoch")
@@ -41,6 +56,20 @@ def train(config, save_dir="./logs", save_folder_name="train", num_workers=2):
         actor.optimizer, step_size=config.LR_DECAY_EPOCH, gamma=config.LR_DECAY_GAMMA
     )
 
+    if use_curriculum_lr == False:
+        curriculum_start = config.TSP_SIZE
+    if curriculum_stochastic:
+        curriculum_scheduler = StochasticCurriculumScheduler(
+            curriculum_start, config.TSP_SIZE, curriculum_stddev
+        )
+    else:
+        curriculum_scheduler = CurriculumScheduler(
+            curriculum_start,
+            config.TSP_SIZE,
+            curriculum_step_epoch,
+            curriculum_step_size,
+        )
+
     # GO
     timer_start = time.time()
     best_valid_avg_len = dict()
@@ -51,7 +80,9 @@ def train(config, save_dir="./logs", save_folder_name="train", num_workers=2):
 
         #  TRAIN
         #######################################################
-        train_avg_len, actor_loss = train_one_epoch(config, actor, **log_package)
+        train_avg_len, actor_loss = train_one_epoch(
+            config, actor, curriculum_scheduler, invariance_weight, **log_package
+        )
 
         #  EVAL
         #######################################################
@@ -118,16 +149,26 @@ def train(config, save_dir="./logs", save_folder_name="train", num_workers=2):
                 json.dump(config._items, f, indent=2)
 
 
-def train_one_epoch(config, actor_group, epoch, timer_start, logger):
+def train_one_epoch(
+    config,
+    actor_group,
+    curriculum_scheduler,
+    invariance_weight,
+    epoch,
+    timer_start,
+    logger,
+):
 
     actor_group.train()
 
     distance_AM = AverageMeter()
     actor_loss_AM = AverageMeter()
 
+    tsp_size = curriculum_scheduler(epoch)
+
     train_loader = TSP_DATA_LOADER__RANDOM(
         num_samples=config.TRAIN_DATASET_SIZE,
-        num_nodes=config.TSP_SIZE,
+        num_nodes=tsp_size,
         batch_size=config.TRAIN_BATCH_SIZE,
     )
 
@@ -140,8 +181,8 @@ def train_one_epoch(config, actor_group, epoch, timer_start, logger):
 
         # Actor Group Move
         ###############################################
-        env = GroupEnvironment(data, config.TSP_SIZE)
-        group_s = config.TSP_SIZE
+        env = GroupEnvironment(data, tsp_size)
+        group_s = tsp_size
         group_state, reward, done = env.reset(group_size=group_s)
         actor_group.reset(group_state)
 
@@ -182,8 +223,18 @@ def train_one_epoch(config, actor_group, epoch, timer_start, logger):
         group_advantage = group_reward - group_reward.mean(dim=1, keepdim=True)
 
         group_loss = -group_advantage * group_log_prob
+        rl_loss = group_loss.mean()
+
+        # calculate invariance loss
+        # group_variance = group_reward.max(dim=1, keepdim=True)[0] - group_reward
+        group_variance = (group_reward.max(dim=1, keepdim=True)[0] - group_reward).mean(
+            dim=1, keepdim=True
+        )
         # shape = (batch, group)
-        loss = group_loss.mean()
+        invariance_loss = (group_variance * group_log_prob).sum(dim=1).mean()
+        # shape = (batch, group)
+
+        loss = rl_loss + invariance_weight * invariance_loss
 
         actor_group.optimizer.zero_grad()
         loss.backward()
@@ -197,9 +248,6 @@ def train_one_epoch(config, actor_group, epoch, timer_start, logger):
 
         # LOGGING
         ###############################################
-        # if (time.time() - logger_start > config.LOG_PERIOD_SEC) or (
-        #     episode == config.TRAIN_DATASET_SIZE
-        # ):
         log_episode = (
             math.ceil(config.TRAIN_DATASET_SIZE / (20 * config.TRAIN_BATCH_SIZE))
             * config.TRAIN_BATCH_SIZE
@@ -208,10 +256,11 @@ def train_one_epoch(config, actor_group, epoch, timer_start, logger):
             timestr = time.strftime("%H:%M:%S", time.gmtime(time.time() - timer_start))
             actor_loss_result = actor_loss_AM.result()
             avg_tour_len = distance_AM.result()
-            log_str = "Ep:{:03d}-{:07d}({:5.1f}%)  T:{:s}  ALoss:{:+5f}  CLoss:{:5f}  Avg.dist:{:5f}".format(
+            log_str = "Ep:{:03d}-{:07d}({:5.1f}%) Size:{}  T:{:s}  ALoss:{:+5f}  CLoss:{:5f}  Avg.dist:{:5f}".format(
                 epoch,
                 episode,
                 episode / config.TRAIN_DATASET_SIZE * 100,
+                tsp_size,
                 timestr,
                 actor_loss_result,
                 0,
@@ -256,7 +305,19 @@ def log_results():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config_path", type=str, default="./configs/tsp20.json")
+    # currciulum learning
+    parser.add_argument("--use_curriculum_lr", type=int, default=0)
+    parser.add_argument("--curriculum_start", type=int, default=5)
+    parser.add_argument("--curriculum_step_epoch", type=int, default=1)
+    parser.add_argument("--curriculum_step_size", type=int, default=1)
+    parser.add_argument("--curriculum_stochastic", type=int, default=0)
+    parser.add_argument("--curriculum_stddev", type=float, default=1)
+
+    parser.add_argument("--use_invariance_loss", type=int, default=0)
+    parser.add_argument("--invariance_weight", type=float, default=1e-2)
+
     parser.add_argument("--num_workers", type=int, default=2)
+
     parser.add_argument("--save_dir", type=str, default="./results/train")
     parser.add_argument("--save_folder_name", type=str, default="train")
     parser.add_argument("--wandb_mode", type=str, default="disabled")
@@ -283,6 +344,13 @@ if __name__ == "__main__":
     config = wandb.config
     train(
         config,
+        invariance_weight=opts.invariance_weight,
+        use_curriculum_lr=opts.use_curriculum_lr,
+        curriculum_stochastic=opts.curriculum_stochastic,
+        curriculum_start=opts.curriculum_start,
+        curriculum_step_epoch=opts.curriculum_step_epoch,
+        curriculum_step_size=opts.curriculum_step_size,
+        curriculum_stddev=opts.curriculum_stddev,
         save_dir=opts.save_dir,
         save_folder_name=opts.save_folder_name,
         num_workers=opts.num_workers,
