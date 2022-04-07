@@ -11,12 +11,12 @@ from main_code.nets.utils.multi_head_attention import (
 # taken from Kwon et al., Kool et al.
 
 
-class Encoder(nn.Module):
+class GraphAttentionEncoder(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.embedding = nn.Linear(2, config.EMBEDDING_DIM)
         self.layers = nn.ModuleList(
-            [Encoder_Layer(config) for _ in range(config.ENCODER_LAYER_NUM)]
+            [GATLayer(config) for _ in range(config.ENCODER_LAYER_NUM)]
         )
 
     def forward(self, data):
@@ -32,7 +32,7 @@ class Encoder(nn.Module):
         return out
 
 
-class Encoder_Layer(nn.Module):
+class GATLayer(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.HEAD_NUM = config.HEAD_NUM
@@ -53,9 +53,9 @@ class Encoder_Layer(nn.Module):
             self.HEAD_NUM * self.KEY_DIM, self.EMBEDDING_DIM
         )
 
-        self.addAndNormalization1 = Add_And_Normalization_Module(config)
-        self.feedForward = Feed_Forward_Module(self.EMBEDDING_DIM, self.FF_HIDDEN_DIM)
-        self.addAndNormalization2 = Add_And_Normalization_Module(config)
+        self.addAndNormalization1 = AddAndNormalizationModule(config)
+        self.feedForward = FeedForwardModule(self.EMBEDDING_DIM, self.FF_HIDDEN_DIM)
+        self.addAndNormalization2 = AddAndNormalizationModule(config)
 
     def forward(self, input1):
         # input.shape = (batch_s, TSP_SIZE, EMBEDDING_DIM)
@@ -78,7 +78,7 @@ class Encoder_Layer(nn.Module):
         return out3
 
 
-class Add_And_Normalization_Module(nn.Module):
+class AddAndNormalizationModule(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.EMBEDDING_DIM = config.EMBEDDING_DIM
@@ -98,7 +98,7 @@ class Add_And_Normalization_Module(nn.Module):
         return normalized.reshape(batch_s, tsp_size, self.EMBEDDING_DIM)
 
 
-class Feed_Forward_Module(nn.Module):
+class FeedForwardModule(nn.Module):
     def __init__(self, embed_dim, hidden_dim):
         super().__init__()
         self.W1 = nn.Linear(embed_dim, hidden_dim)
