@@ -15,6 +15,7 @@ data/**
 
 configs/sweeps
 configs/final_test
+configs/training
 
 scripts/*
 !scripts/data_handling
