@@ -9,9 +9,13 @@ results/*
 !results/.gitkeep
 !results/saved_models
 
-data/**
+data/*
 !data/.gitkeep
 !data/*.sh
+!data/test_sets/
+data/test_sets/*
+!data/test_sets/tsplib_n_200_29/
+
 
 configs/sweeps
 configs/final_test
