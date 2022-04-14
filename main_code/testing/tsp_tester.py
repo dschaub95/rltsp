@@ -49,11 +49,9 @@ class TSPTester:
         self.num_workers = num_workers
         self._prepare_test_set(num_nodes, num_samples)
         # clip number of trajectories
-        self.num_trajectories = np.clip(num_trajectories, 1, self.num_nodes)
+        self.num_trajectories = num_trajectories
 
         # implement later
-        # self.env = GroupEnvironment()
-        self.result = TSPTestResult()
         wandb.define_metric("episode")
         wandb.define_metric("avg_error", step_metric="episode")
 
@@ -76,7 +74,6 @@ class TSPTester:
             )
         # let the data loader handle the sample and node num depending on the dataset etc
         self.num_samples = self.data_loader.num_samples
-        self.num_nodes = self.data_loader.num_nodes
 
     def test(self, agent):
         self.result = TSPTestResult()
@@ -88,21 +85,24 @@ class TSPTester:
                 "==================================================================="
             )
             self.logger.info(
-                f"Number of considered trajectories: {self.num_trajectories}"
+                f"Max number of considered trajectories: {self.num_trajectories}"
             )
             self.logger.info(f"Number of sampling steps: {self.sampling_steps}")
             self.logger.info(f"Using POMO augmentation: {self.use_pomo_aug}")
             self.logger.logger_start = time.time()
-        timer_start = time.time()
+        global_timer_start = time.time()
         episode = 0
         for batch_idx, (node_batch, opt_lens) in enumerate(self.data_loader):
+            batch_timer_start = time.time()
             # print(opt_lens)
             batch = Tensor(node_batch)
             batch_s = batch.size(0)
+            num_nodes = batch.size(1)
+            num_trajectories = np.clip(self.num_trajectories, 1, num_nodes)
             episode += batch_s / self.sampling_steps
             with torch.no_grad():
-                env = GroupEnvironment(batch, self.num_nodes)
-                group_s = self.num_trajectories
+                env = GroupEnvironment(batch, num_nodes)
+                group_s = num_trajectories
                 # get initial group state with specific nodes selected as first nodes in different tours
                 group_state, reward, done = env.reset(group_size=group_s)
                 # do the encoding only once
@@ -112,7 +112,13 @@ class TSPTester:
                     # shape = (batch, group)
                     group_state, reward, done = env.step(action)
             self._aggregate_results(
-                reward, opt_lens, group_state, eval_dist_AM_0, timer_start
+                reward,
+                opt_lens,
+                group_state,
+                eval_dist_AM_0,
+                global_timer_start,
+                num_nodes,
+                num_trajectories,
             )
             # do the intermediate logging
             # maybe also log action info
@@ -121,7 +127,14 @@ class TSPTester:
         return self.result
 
     def _aggregate_results(
-        self, reward, opt_lens, group_state, eval_dist_AM_0, timer_start
+        self,
+        reward,
+        opt_lens,
+        group_state,
+        eval_dist_AM_0,
+        global_timer_start,
+        num_nodes,
+        num_trajectories,
     ):
         tours = group_state.selected_node_list
         # handle augmentation
@@ -133,15 +146,15 @@ class TSPTester:
             )
             # print(torch.allclose(reward_sampling, reward))
             reward_sampling = torch.reshape(
-                reward_sampling, (-1, self.sampling_steps, self.num_trajectories)
+                reward_sampling, (-1, self.sampling_steps, num_trajectories)
             )
             reward, max_sample_indices = reward_sampling.max(dim=1)
             # reduce tours based on sampling steps
             tours = tours.reshape(
-                (-1, self.sampling_steps, self.num_trajectories, self.num_nodes)
+                (-1, self.sampling_steps, num_trajectories, num_nodes)
             )
             indices = max_sample_indices[:, None, :, None].expand(
-                (-1, 1, -1, self.num_nodes)
+                (-1, 1, -1, num_nodes)
             )
             tours = tours.gather(dim=1, index=indices).squeeze(dim=1)
 
@@ -150,7 +163,7 @@ class TSPTester:
         eval_dist_AM_0.push(-max_reward)  # reward was given as negative dist
 
         # make final tour selection based on trajectories
-        indices = max_traj_indices[:, None, None].expand(-1, 1, self.num_nodes)
+        indices = max_traj_indices[:, None, None].expand(-1, 1, num_nodes)
         final_tours = tours.gather(dim=1, index=indices).squeeze(dim=1)
 
         # in case of sampling only select the optimal lengths for the max values
@@ -166,18 +179,21 @@ class TSPTester:
         self.result.avg_approx_error = np.mean(self.result.approx_errors)
         self.result.avg_length = eval_dist_AM_0.peek()
         self.result.tours.extend(final_tours.tolist())
-        self.result.computation_time = time.strftime(
-            "%H:%M:%S", time.gmtime(time.time() - timer_start)
-        )
+        self.result.global_computation_time = time.time() - global_timer_start
 
     def _log_intermediate(self, episode):
         # maybe also log action info
         if self.logger is not None:
-            wandb.log({"avg_error": self.result.avg_approx_error, "episode": episode})
-            # if (time.time() - self.logger.logger_start > self.log_period_sec) or (
-            #     episode >= self.num_samples
-            # ):
-            timestr = self.result.computation_time
+            wandb.log(
+                {
+                    "avg_error": self.result.avg_approx_error,
+                    "episode": episode,
+                    "computation_time": self.result.global_computation_time,
+                }
+            )
+            timestr = time.strftime(
+                "%H:%M:%S", time.gmtime(self.result.global_computation_time)
+            )
             percent = np.round((episode / self.num_samples) * 100, 1)
             episode_str = f"{int(episode)}".zfill(len(str(int(self.num_samples))))
             avg_length = np.round(self.result.avg_length, 7)
@@ -196,10 +212,36 @@ class TSPTester:
             log_tbl = wandb.Table(data=pd.DataFrame(log_data))
             wandb.log({"run_metrics": log_tbl})
             # also upload found tours
+            max_tour_length = len(max(self.result.tours, key=len))
+            tmp_array = np.full((max_tour_length,), np.nan)
             tour_data = {
-                f"Instance {i}": tour for i, tour in enumerate(self.result.tours)
+                f"Instance {i}": np.concatenate(
+                    (tour, tmp_array[0 : max_tour_length - len(tour)])
+                )
+                for i, tour in enumerate(self.result.tours)
             }
-            tour_tbl = wandb.Table(data=pd.DataFrame(tour_data))
+            tour_tbl = wandb.Table(data=pd.DataFrame(tour_data, copy=False))
+            # make more efficient
+            # min_tour_length = len(min(self.result.tours, key=len))
+            # if min_tour_length < max_tour_length:
+            #     tmp_array = np.full((max_tour_length,), np.nan)
+            #     tour_array = np.array(
+            #         [
+            #             np.concatenate(
+            #                 (tour, tmp_array[0 : max_tour_length - len(tour)])
+            #             )
+            #             for tour in self.result.tours
+            #         ]
+            #     ).transpose()
+            # else:
+            #     tour_array = np.array(self.result.tours).transpose()
+            # tour_names = [f"Instance {i}" for i in range(self.num_samples)]
+            # tour_indices = np.arange(max_tour_length)
+            # tour_tbl = wandb.Table(
+            #     data=pd.DataFrame(
+            #         data=tour_array, columns=tour_names, index=tour_indices
+            #     )
+            # )
             wandb.log({"tours": tour_tbl})
 
     def save_results(self, file_path):
@@ -217,7 +259,7 @@ class TSPTestResult:
     def __init__(self, test_config=None) -> None:
         self.avg_approx_error = np.nan
         self.avg_length = np.nan
-        self.computation_time = ""
+        self.global_computation_time = 0
         self.pred_lengths = []
         self.opt_lengths = []
         self.approx_errors = []
