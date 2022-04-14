@@ -93,7 +93,6 @@ class TSPTester:
         global_timer_start = time.time()
         episode = 0
         for batch_idx, (node_batch, opt_lens) in enumerate(self.data_loader):
-            batch_timer_start = time.time()
             # print(opt_lens)
             batch = Tensor(node_batch)
             batch_s = batch.size(0)
