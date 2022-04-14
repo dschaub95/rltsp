@@ -97,6 +97,7 @@ class MCTS:
             self.exploration_rating += leaf.orig_prob
             if self.env.is_done_state(leaf_state):
                 leaf_value = self.env.get_return(leaf_state)
+                leaf_value = float(leaf_value.max(dim=-1)[0].max(dim=-1)[0])
                 # increase the number of visits by one for all nodes belonging to this path
                 # and update the value along the way
                 leaf.update_recursive(leaf_value)
@@ -117,7 +118,8 @@ class MCTS:
             ):
                 leaf.revert_virtual_loss(self.virtual_loss)
                 # update_value
-                leaf.update_recursive(value)
+                leaf_value = float(value.max(dim=-1)[0].max(dim=-1)[0])
+                leaf.update_recursive(leaf_value)
                 # expand node considering all possible actions
                 available_actions = leaf_state.available_actions
                 # gather the probabilities for all the available actions

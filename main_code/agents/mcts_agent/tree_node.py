@@ -100,7 +100,6 @@ class TreeNode:
     def update_recursive(self, leaf_value):
         if self._parent:
             self._parent.update_recursive(leaf_value)
-        leaf_value = float(leaf_value.max(dim=-1)[0].max(dim=-1)[0])
         self.update(leaf_value)
 
     def get_value(
