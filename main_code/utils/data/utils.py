@@ -3,8 +3,17 @@ import numpy as np
 import random
 import torch
 import os
+import re
 import json
 from itertools import combinations
+
+
+def order_names(names):
+    atoi = lambda text: int(text) if text.isdigit() else text
+    natural_keys = lambda text: [atoi(c) for c in re.split("(\d+)", text)]
+    names.sort(key=natural_keys)
+    return names
+
 
 # convert node coords into nx graph
 def convert_tsp_to_nx(node_coords):

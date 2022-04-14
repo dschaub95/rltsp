@@ -2,6 +2,7 @@ import numpy as np
 import os
 import json
 from torch.utils.data import Dataset
+from main_code.utils.data.utils import order_names
 
 from main_code.utils.data.tsp_transformer import (
     TSPEucTransformer,
@@ -26,17 +27,18 @@ class DiskGenerator(Generator):
         super().__init__()
         self.path = dataset_path
         self.load_heatmaps = load_heatmaps
-        self.num_samples = len(
+        self.instance_names = order_names(
             [
                 item
                 for item in os.listdir(f"{self.path}")
                 if os.path.isdir(f"{self.path}/{item}")
             ]
         )
+        # order instance names
+        self.num_samples = len(self.instance_names)
 
     def get_new_instance(self, index):
-        idx_str = f"{index}".zfill(len(str(self.num_samples)))
-        instance_path = f"{self.path}/tsp_{idx_str}"
+        instance_path = f"{self.path}/{self.instance_names[index]}"
         # load txt files directly as numpy arrays
         node_feats = np.loadtxt(f"{instance_path}/node_feats.txt")
         # used later with agnn
