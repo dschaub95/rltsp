@@ -203,20 +203,19 @@ class TSPEucTransformer:
         y = problem[:, 1::]
         return np.concatenate((x - shift[0], y - shift[1]), -1)
 
-    def fit_TSP_into_square(self, problem):
-        dimension = problem.shape[1]
-        maxima = []
-        minima = []
-        for k in range(dimension):
-            maxima.append(np.max(problem[:, k]))
-            minima.append(np.min(problem[:, k]))
-
-        differences = [maxima[k] - minima[k] for k in range(dimension)]
-
+    def fit_TSP_into_square(self, problem, centralize=True):
+        maxima = problem.max(axis=0)
+        minima = problem.min(axis=0)
+        differences = maxima - minima
         scaler = 1 / np.max(differences)
-
-        for k in range(dimension):
-            problem[:, k] = scaler * (problem[:, k] - minima[k])
+        # get dimension along max dif is attained
+        # centralize other dimension inside the square
+        # modify minima accordingly
+        if centralize:
+            center_offset = (differences.max() - differences) / 2
+        else:
+            center_offset = 0
+        problem = scaler * (problem + center_offset - minima)
         return problem
 
     def center_TSP(self, problem, refit=False):
