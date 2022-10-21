@@ -90,13 +90,16 @@ class DiskTSPTestDataLoader(TSPTestDataLoader):
         use_pomo_aug=False,
         sampling_steps=1,
         num_workers=4,
+        collate_fn=None,
     ):
+        if collate_fn is None:
+            collate_fn = TSP_general_collate_fn
         # load data set from disk
         self.test_set = DiskTSPTestSet(test_set_path, use_pomo_aug, sampling_steps)
         super().__init__(
             self.test_set,
             batch_size,
-            collate_fn=TSP_general_collate_fn,
+            collate_fn=collate_fn,
             use_pomo_aug=use_pomo_aug,
             sampling_steps=sampling_steps,
             num_workers=num_workers,
@@ -111,9 +114,9 @@ def TSP_collate_fn(batch):
 
 def TSP_multi_collate_fn(batch):
     # batch consists of node coords, solution/length
-    node_xy_batch = np.array([sample[0] for sample in batch])
+    node_xy_batch = np.concatenate([sample[0] for sample in batch])
     node_xy_batch = Tensor(node_xy_batch)
-    solution_batch = np.array([sample[1] for sample in batch])
+    solution_batch = np.concatenate([sample[1] for sample in batch])
     solution_batch = Tensor(solution_batch)
     opt_len_batch = np.array([sample[2] for sample in batch])
     opt_len_batch = Tensor(opt_len_batch)
@@ -132,15 +135,25 @@ def TSP_general_collate_fn(batch):
         num_feats = tmp_arr[0].shape[1]
         opt_len_batch = np.empty((batch_s,)) * np.nan
     node_feats_batch = np.concatenate(tmp_arr[:, 0]).reshape(batch_s, -1, num_feats)
-    # num_nodes = node_feats_batch.shape[1]
-    # if num_entries == 2:
-    #     opt_len_batch = tmp_arr[:, 1].astype(np.float64)
-    #     opt_tour_batch = np.empty((batch_s, num_nodes)) * np.nan
-    # elif num_entries > 2:
-    #     opt_len_batch = tmp_arr[:, 1].astype(np.float64)
-    #     opt_tour_batch = np.concatenate(tmp_arr[:, 2]).reshape(batch_s, -1)
-    # else:
-    #     opt_len_batch = np.empty((batch_s,)) * np.nan
-    #     opt_tour_batch = np.empty((batch_s, num_nodes)) * np.nan
-    # return node_feats_batch, opt_len_batch, opt_tour_batch
     return node_feats_batch, opt_len_batch
+
+
+def TSP_general_collate_fn_(batch):
+    tmp_arr = np.array(batch, dtype=object)
+    batch_s = tmp_arr.shape[0]
+    num_entries = tmp_arr.shape[1]
+    node_feats_batch = None
+    opt_len_batch = None
+    opt_tour_batch = None
+    if num_entries >= 1:
+        num_feats = tmp_arr[0, 0].shape[1]
+        node_feats_batch = (
+            np.concatenate(tmp_arr[:, 0])
+            .reshape(batch_s, -1, num_feats)
+            .astype(np.float64)
+        )
+    if num_entries > 1:
+        opt_len_batch = tmp_arr[:, 1].astype(np.float64)
+    if num_entries > 2:
+        opt_tour_batch = np.concatenate(tmp_arr[:, 2]).reshape(batch_s, -1)
+    return node_feats_batch, opt_len_batch, opt_tour_batch
