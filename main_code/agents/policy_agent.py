@@ -20,8 +20,7 @@ class PolicyAgent(BaseAgent):
         action_probs = self.get_action_probabilities(state)
         # shape = (batch, group, TSP_SIZE)
         action = action_probs.argmax(dim=2)
-        agent_info = None
-        return action, agent_info
+        return action, action_probs
 
     def learn(self, reward, group_prob_list):
         group_reward = reward
