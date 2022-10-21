@@ -221,7 +221,7 @@ def train_one_epoch(
         # shape = (batch, group)
 
         group_advantage = group_reward - group_reward.mean(dim=1, keepdim=True)
-
+        # gradient ascent! therefor multiply with minus
         group_loss = -group_advantage * group_log_prob
         rl_loss = group_loss.mean()
 
@@ -312,9 +312,9 @@ if __name__ == "__main__":
     parser.add_argument("--curriculum_step_size", type=int, default=1)
     parser.add_argument("--curriculum_stochastic", type=int, default=0)
     parser.add_argument("--curriculum_stddev", type=float, default=1)
-
+    # invariance loss
     parser.add_argument("--use_invariance_loss", type=int, default=0)
-    parser.add_argument("--invariance_weight", type=float, default=1e-2)
+    parser.add_argument("--invariance_weight", type=float, default=0.0)
 
     parser.add_argument("--num_workers", type=int, default=2)
 
