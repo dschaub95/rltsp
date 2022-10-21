@@ -1,4 +1,4 @@
-name: rltsp
+name: pomo
 channels:
   - pyg
   - pytorch
