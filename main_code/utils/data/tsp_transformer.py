@@ -207,7 +207,6 @@ class TSPEucTransformer:
         maxima = problem.max(axis=0)
         minima = problem.min(axis=0)
         differences = maxima - minima
-        scaler = 1 / np.max(differences)
         # get dimension along max dif is attained
         # centralize other dimension inside the square
         # modify minima accordingly
@@ -215,7 +214,7 @@ class TSPEucTransformer:
             center_offset = (differences.max() - differences) / 2
         else:
             center_offset = 0
-        problem = scaler * (problem + center_offset - minima)
+        problem = (problem + center_offset - minima) / differences.max()
         return problem
 
     def center_TSP(self, problem, refit=False):
