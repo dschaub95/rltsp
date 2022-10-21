@@ -22,8 +22,6 @@ def main():
 
 def parse_adaptlr_args():
     parser = argparse.ArgumentParser()
-    # num_epochs=4,
-    # batch_size=8,
     parser.add_argument("--num_epochs", type=int, default=4)
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--state_space_size", type=int, default=32)
@@ -82,7 +80,7 @@ def parse_args():
     parser.add_argument(
         "--tsp_type", type=str, default="uniform"
     )  # later add clustered
-    parser.add_argument("--num_workers", type=int, default=2)
+    parser.add_argument("--num_workers", type=int, default=4)
     # saved test set
     parser.add_argument("--test_set", type=str, default="fu_et_al_n_20_10000")
     parser.add_argument("--test_type", type=str, default="test")
